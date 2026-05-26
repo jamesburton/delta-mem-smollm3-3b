@@ -216,3 +216,27 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Project additions ---
+
+# Large model artifacts (always pushed via HF Hub / releases, never git)
+*.safetensors
+*.bin
+*.gguf
+*.pt
+*.pth
+checkpoints/
+artifacts/local/
+
+# HF caches if ever set inside the repo
+hub/
+
+# Local scratch
+scratch/
+tmp/
+
+# Explicit allow-list for project files that match earlier ignore globs
+!control/STATUS
+!results/.gitkeep
+!results/**/*.json
+!results/**/*.md

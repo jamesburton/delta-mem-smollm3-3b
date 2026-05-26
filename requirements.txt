@@ -1,0 +1,37 @@
+# Pinned at scaffold time — review and bump before first real run.
+# Some versions deliberately tracking-latest because the May-2026 features
+# need the most recent transformers / accelerate.
+
+# Core HF stack
+transformers>=4.55.0
+accelerate>=1.2.0
+peft>=0.14.0
+safetensors>=0.4.5
+sentencepiece>=0.2.0
+tokenizers>=0.20.0
+
+# Performance kernels (CUDA only — skipped on non-CUDA stages)
+# flash-attn>=2.7.0  ; sys_platform != "darwin"  # install via separate cell on Kaggle
+# deepspeed>=0.15.0  ; sys_platform != "darwin"
+
+# Eval / data
+datasets>=3.0.0
+evaluate>=0.4.3
+numpy>=2.0.0
+pandas>=2.2.0
+scipy>=1.13.0
+
+# Llama.cpp leg (for cells 9a/9b/9c)
+llama-cpp-python>=0.3.0
+
+# Oracle / API
+anthropic>=0.40.0  # fallback path when claude CLI isn't authed
+requests>=2.32.0
+
+# Notebook UX
+ipywidgets>=8.1.0
+tqdm>=4.66.0
+matplotlib>=3.9.0
+
+# Git automation from the notebook
+gitpython>=3.1.0
