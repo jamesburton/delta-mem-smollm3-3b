@@ -1,23 +1,33 @@
 """Backbone model loading, with optional δ-Mem adapter attach.
 
-The upstream `declare-lab/delta-Mem` package exposes:
-    from delta_mem import attach_delta_mem, load_delta_mem_adapter
+The upstream `declare-lab/delta-Mem` package isn't pip-installable: it's a
+reference repo that you clone and either install its `requirements.txt` or
+put on `PYTHONPATH`. `scripts/kaggle_bootstrap.sh` does that automatically
+under `.deps/delta-Mem`; this module finds the clone at import time.
 
-If the package isn't installed, we fail loudly when an adapter is requested
-but allow vanilla loading to proceed.
+The public API (per upstream README) is:
+    from deltamem.core import HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter
+    config = HFDeltaMemConfig.from_pretrained(adapter_dir)
+    attach_delta_mem(model, config)
+    load_delta_mem_adapter(model, adapter_dir)
+
+Note that `adapter_dir` is a LOCAL directory, not an HF Hub id; we
+`snapshot_download` the adapter on demand.
 """
 
 from __future__ import annotations
 
+import sys
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 
 @dataclass(frozen=True)
 class BackboneConfig:
     model_id: str
-    dtype: str = "bfloat16"      # "bfloat16" | "float16" | "float32"
-    device: str = "cuda"          # "cuda" | "cpu"
+    dtype: str = "bfloat16"
+    device: str = "cuda"
     delta_mem_adapter_id: Optional[str] = None
     trust_remote_code: bool = True
 
@@ -31,6 +41,58 @@ _DTYPE_MAP = {"bfloat16": "bfloat16", "float16": "float16", "float32": "float32"
 def _torch_dtype(name: str):
     import torch
     return getattr(torch, _DTYPE_MAP[name])
+
+
+def _candidate_deltamem_roots():
+    """Common places kaggle_bootstrap.sh and local dev put the clone."""
+    return [
+        Path.cwd() / ".deps" / "delta-Mem",
+        Path(__file__).resolve().parents[1] / ".deps" / "delta-Mem",
+        Path("/kaggle/working/delta-mem-smollm3-3b/.deps/delta-Mem"),
+    ]
+
+
+def _ensure_deltamem_importable():
+    """Import deltamem.core; on ImportError, look for a clone and retry.
+
+    Returns (HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter).
+    """
+    try:
+        from deltamem.core import (  # type: ignore
+            HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter,
+        )
+        return HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter
+    except ImportError:
+        pass
+    for candidate in _candidate_deltamem_roots():
+        if (candidate / "deltamem").is_dir():
+            sys.path.insert(0, str(candidate))
+            try:
+                from deltamem.core import (  # type: ignore
+                    HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter,
+                )
+                return HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter
+            except ImportError:
+                sys.path.pop(0)
+                continue
+    raise RuntimeError(
+        "deltamem package not importable. The upstream repo is not on PyPI — "
+        "either run scripts/kaggle_bootstrap.sh (which clones it to .deps/delta-Mem) "
+        "or set PYTHONPATH to include a local clone."
+    )
+
+
+def _resolve_adapter_dir(adapter_id_or_path: str) -> str:
+    """Return a local directory containing the adapter.
+
+    If `adapter_id_or_path` already points to a local directory, return it
+    unchanged. Otherwise treat it as a HF Hub repo id and snapshot_download.
+    """
+    p = Path(adapter_id_or_path)
+    if p.exists() and p.is_dir():
+        return str(p)
+    from huggingface_hub import snapshot_download
+    return snapshot_download(repo_id=adapter_id_or_path)
 
 
 def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any]:
@@ -50,13 +112,9 @@ def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any]:
     model.eval()
 
     if cfg.delta_mem_adapter_id:
-        try:
-            from delta_mem import attach_delta_mem, load_delta_mem_adapter  # type: ignore
-        except ImportError as e:
-            raise RuntimeError(
-                "delta-Mem adapter requested but `delta_mem` package is not installed.\n"
-                "Install per upstream: pip install git+https://github.com/declare-lab/delta-Mem"
-            ) from e
-        model = attach_delta_mem(model)
-        load_delta_mem_adapter(model, cfg.delta_mem_adapter_id)
+        HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter = _ensure_deltamem_importable()
+        adapter_dir = _resolve_adapter_dir(cfg.delta_mem_adapter_id)
+        dm_config = HFDeltaMemConfig.from_pretrained(adapter_dir)
+        attach_delta_mem(model, dm_config)
+        load_delta_mem_adapter(model, adapter_dir)
     return model, tok

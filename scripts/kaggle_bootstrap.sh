@@ -36,9 +36,22 @@ echo "==> profile: $PROFILE  (TORCH_CUDA_ARCH_LIST=$ARCH_LIST)"
 echo "==> installing pinned requirements"
 pip install -q -r requirements.txt
 
-echo "==> installing delta-Mem (upstream)"
-pip install -q "git+https://github.com/declare-lab/delta-Mem" \
-  || echo "  delta-Mem install failed; cells 2 and 7 will fail with a clear RuntimeError"
+echo "==> setting up delta-Mem (upstream — clone + PYTHONPATH, not pip)"
+DM_DIR=".deps/delta-Mem"
+mkdir -p .deps
+if [[ ! -d "$DM_DIR/deltamem" ]]; then
+  git clone --depth=1 https://github.com/declare-lab/delta-Mem "$DM_DIR" \
+    || echo "  clone failed; cells 2 and 7 will fail at deltamem import"
+fi
+if [[ -f "$DM_DIR/requirements.txt" ]]; then
+  echo "  installing upstream's pinned requirements (conflicts are non-fatal)"
+  pip install -q -r "$DM_DIR/requirements.txt" 2>&1 | tail -2 || true
+fi
+# Sanity check
+if [[ -d "$DM_DIR/deltamem" ]]; then
+  python -c "import sys; sys.path.insert(0, '$DM_DIR'); from deltamem.core import attach_delta_mem; print('  deltamem.core imports OK from', '$DM_DIR')" \
+    || echo "  deltamem.core failed to import even with PYTHONPATH set"
+fi
 
 echo "==> flash-attn (cache → community → source)"
 python scripts/install_flash_attn.py \
