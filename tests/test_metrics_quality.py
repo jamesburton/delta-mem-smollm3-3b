@@ -1,5 +1,6 @@
 import re
 import random
+import pytest
 
 from harness.metrics import quality
 
@@ -44,3 +45,21 @@ def test_score_multineedle_partial_recovery():
     assert score.recall_all is False
     assert score.recall_any is True
     assert score.per_needle == [True, False, False]
+
+
+def test_score_multineedle_tolerates_whitespace_separators():
+    task = quality.make_multineedle_task(
+        target_tokens=500, n_needles=2, seed=1,
+        filler_text="x " * 300,
+    )
+    # Model formats codes with spaces, newlines, tabs instead of hyphens
+    code0_spaced = task.needles[0].code.replace("-", " ")
+    code1_newlined = task.needles[1].code.replace("-", "\n")
+    answer = f"{task.needles[0].key}: {code0_spaced}\n{task.needles[1].key}: {code1_newlined}"
+    score = quality.score_multineedle(task, answer)
+    assert score.per_needle == [True, True], f"got {score.per_needle}"
+
+
+def test_make_multineedle_task_rejects_too_many_needles():
+    with pytest.raises(ValueError, match="exceeds _KEY_POOL"):
+        quality.make_multineedle_task(target_tokens=100, n_needles=99, seed=0)

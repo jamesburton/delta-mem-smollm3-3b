@@ -48,6 +48,11 @@ def make_multineedle_task(
     filler_text: Optional[str] = None,
 ) -> MultiNeedleTask:
     rng = random.Random(seed)
+    if n_needles > len(_KEY_POOL):
+        raise ValueError(
+            f"n_needles={n_needles} exceeds _KEY_POOL size ({len(_KEY_POOL)}). "
+            "Extend _KEY_POOL or reduce n_needles."
+        )
     if filler_text is None:
         filler_text = ("Lorem ipsum dolor sit amet, consectetur adipiscing elit. " * 200)
 
@@ -91,7 +96,9 @@ def score_multineedle(task: MultiNeedleTask, answer: str) -> MultiNeedleScore:
     hits = []
     for n in task.needles:
         # Code must appear in the answer; tolerate whitespace and case variation
-        pattern = re.escape(n.code).replace(r"\-", r"[- ]?")
+        # Tolerate any whitespace (newline, tab, multiple spaces) in place
+        # of the hyphen, since LLMs often line-wrap structured answers.
+        pattern = re.escape(n.code).replace(r"\-", r"[-\s]?")
         hits.append(bool(re.search(pattern, answer, flags=re.IGNORECASE)))
     return MultiNeedleScore(
         per_needle=hits,
