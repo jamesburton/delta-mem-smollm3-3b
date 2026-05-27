@@ -17,6 +17,7 @@ Note that `adapter_dir` is a LOCAL directory, not an HF Hub id; we
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -104,11 +105,12 @@ def _resolve_device_args(device: str) -> Dict[str, Any]:
         n = torch.cuda.device_count()
         if n <= 1:
             return {"device_map": "cuda"}
-        # Cap each GPU at ~80% of its real capacity so loading workspace +
-        # forward-pass activations have headroom. For a T4 (~15 GiB) this
-        # means ~12 GiB per GPU; the 4B model splits ~4 GB per GPU,
-        # leaving ~8 GB per GPU for activations / KV cache.
-        per_gpu_gib = int(torch.cuda.get_device_properties(0).total_memory * 0.80 / (1024**3))
+        # Allow the user to tune via env var; the 50% default forces a real
+        # split: Qwen3-4B is ~8GB bf16 and won't fit in 7GiB on a single T4.
+        # If you raise this and the model fits on one GPU, accelerate will
+        # happily put it all there (per its "balanced" semantics).
+        pct = float(os.environ.get("GPU_MAX_PCT", "0.50"))
+        per_gpu_gib = int(torch.cuda.get_device_properties(0).total_memory * pct / (1024**3))
         max_memory = {i: f"{per_gpu_gib}GiB" for i in range(n)}
         return {"device_map": "balanced", "max_memory": max_memory}
     # Unknown — pass through verbatim (e.g. a custom dict-form device_map)
@@ -126,6 +128,30 @@ def _resolve_adapter_dir(adapter_id_or_path: str) -> str:
         return str(p)
     from huggingface_hub import snapshot_download
     return snapshot_download(repo_id=adapter_id_or_path)
+
+
+def _print_load_diagnostics(model) -> None:
+    try:
+        import torch
+        hf_map = getattr(model, "hf_device_map", None)
+        if hf_map is None:
+            print("  hf_device_map: <none — model is on a single device or not dispatched>")
+        else:
+            # Summarise by device: how many modules each got
+            counts: Dict[str, int] = {}
+            for dev in hf_map.values():
+                key = str(dev)
+                counts[key] = counts.get(key, 0) + 1
+            summary = ", ".join(f"{k}: {v}" for k, v in sorted(counts.items()))
+            print(f"  hf_device_map summary: {{{summary}}}")
+        if torch.cuda.is_available():
+            for i in range(torch.cuda.device_count()):
+                free, total = torch.cuda.mem_get_info(i)
+                used = total - free
+                print(f"  GPU {i} after load: {used/1024**3:.2f} GiB used / "
+                      f"{total/1024**3:.2f} GiB total")
+    except Exception as e:
+        print(f"  (diagnostics failed: {e})")
 
 
 def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any]:
@@ -158,6 +184,10 @@ def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any]:
     if model is None:
         model = AutoModelForCausalLM.from_pretrained(cfg.model_id, **common)
     model.eval()
+
+    # Diagnostics: did accelerate actually split the model, and what's the
+    # GPU memory footprint right after load?
+    _print_load_diagnostics(model)
 
     if cfg.delta_mem_adapter_id:
         HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter = _ensure_deltamem_importable()

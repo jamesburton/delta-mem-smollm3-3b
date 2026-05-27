@@ -74,6 +74,16 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
         delta_mem_adapter_id=rc.delta_mem_adapter_id,
     )
     memory.reset_peak_vram()
+    # Pre-load diagnostic: confirm GPUs are actually empty before we start
+    try:
+        import torch
+        if torch.cuda.is_available():
+            for i in range(torch.cuda.device_count()):
+                free, total = torch.cuda.mem_get_info(i)
+                print(f"  GPU {i} pre-load: {(total-free)/1024**3:.2f} GiB used / "
+                      f"{total/1024**3:.2f} GiB total")
+    except Exception:
+        pass
     model = None
     asst = None
     try:
