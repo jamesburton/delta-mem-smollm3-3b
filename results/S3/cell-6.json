@@ -1,0 +1,7 @@
+{
+  "cell_id": "6",
+  "title": "Qwen3-4B + spec-decode",
+  "status": "failed",
+  "error": "RuntimeError('FlashAttention only supports Ampere GPUs or newer.')",
+  "timestamp": "2026-05-27T19:40:21.424562Z"
+}
