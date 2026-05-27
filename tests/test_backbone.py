@@ -63,6 +63,21 @@ def test_resolve_device_args_returns_expected_shapes(monkeypatch):
     assert backbone._resolve_device_args("auto") == {"device_map": None}
 
 
+def test_resolve_device_args_includes_cpu_offload_on_single_gpu(monkeypatch):
+    """Single-GPU auto mode should include a 'cpu' key in max_memory."""
+    import torch
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    # Fake a 12 GB GPU
+    class _Props:
+        total_memory = 12 * 1024**3
+    monkeypatch.setattr(torch.cuda, "get_device_properties", lambda i: _Props())
+    result = backbone._resolve_device_args("auto")
+    assert result["device_map"] == "auto"
+    assert "cpu" in result["max_memory"]
+    assert 0 in result["max_memory"]
+
+
 def test_load_backbone_falls_back_when_flash_attn_unavailable(tiny_model_id, monkeypatch):
     """Loading a CPU tiny model with FA2 requested should silently fall back."""
     cfg = backbone.BackboneConfig(

@@ -94,12 +94,16 @@ def _ensure_deltamem_importable():
 def _resolve_device_args(device: str) -> Dict[str, Any]:
     """Translate a high-level device strategy into kwargs for from_pretrained.
 
-    - "cpu":        device_map=None (load to CPU)
-    - "cuda":       device_map="cuda" (pin to cuda:0 — single-GPU machines)
-    - "auto"/"balanced": device_map="balanced" + per-GPU max_memory cap
-      that leaves headroom for activations and KV cache. Explicit cap is
-      necessary because accelerate's "auto" considers only the model size,
-      not the inference workspace it'll need afterwards.
+    - "cpu": load to CPU
+    - "cuda": pin to cuda:0 only
+    - "cuda:N": pin to specified device
+    - "auto"/"balanced": multi-GPU balanced split, with CPU offload as
+      last-resort fallback when GPU memory is tight. Tunable via:
+        GPU_MAX_PCT - fraction of each GPU we'll fill (default 0.50)
+        CPU_MAX_GIB - host RAM budget for spillover (default 16)
+
+    NOTE: the δ-Mem path doesn't go through here — upstream's
+    DeltaMemChatSession pins to a single device.
     """
     if device == "cpu":
         return {"device_map": None}
@@ -110,15 +114,18 @@ def _resolve_device_args(device: str) -> Dict[str, Any]:
         if not torch.cuda.is_available():
             return {"device_map": None}
         n = torch.cuda.device_count()
-        if n <= 1:
-            return {"device_map": "cuda"}
-        # Allow the user to tune via env var; the 50% default forces a real
-        # split: Qwen3-4B is ~8GB bf16 and won't fit in 7GiB on a single T4.
-        # If you raise this and the model fits on one GPU, accelerate will
-        # happily put it all there (per its "balanced" semantics).
         pct = float(os.environ.get("GPU_MAX_PCT", "0.50"))
+        cpu_offload_gib = int(os.environ.get("CPU_MAX_GIB", "16"))
+        if n == 1:
+            # Single GPU: still allow CPU spillover so 3060 12GB can hold
+            # the 4B model even at tight margins. Cap GPU at GPU_MAX_PCT.
+            per_gpu_gib = int(torch.cuda.get_device_properties(0).total_memory * pct / (1024**3))
+            max_memory = {0: f"{per_gpu_gib}GiB", "cpu": f"{cpu_offload_gib}GiB"}
+            return {"device_map": "auto", "max_memory": max_memory}
+        # Multi-GPU: split across GPUs, with CPU as last-resort offload.
         per_gpu_gib = int(torch.cuda.get_device_properties(0).total_memory * pct / (1024**3))
         max_memory = {i: f"{per_gpu_gib}GiB" for i in range(n)}
+        max_memory["cpu"] = f"{cpu_offload_gib}GiB"
         return {"device_map": "balanced", "max_memory": max_memory}
     # Unknown — pass through verbatim (e.g. a custom dict-form device_map)
     return {"device_map": device}
