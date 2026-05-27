@@ -240,3 +240,11 @@ tmp/
 !results/.gitkeep
 !results/**/*.json
 !results/**/*.md
+
+# Wheel cache (the standard Python .gitignore above ignores `wheels/`;
+# we re-allow it because we DO want to commit pre-built wheels for
+# slow-to-build packages like flash-attn so subsequent Kaggle/Colab
+# sessions can install them in seconds instead of rebuilding).
+!wheels/
+!wheels/**
+!wheels/**/.gitkeep
