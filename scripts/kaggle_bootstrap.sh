@@ -6,19 +6,17 @@
 #
 # Assumes the repo is already cloned to CWD.
 #
-# Wheel cache: slow-to-build packages (flash-attn) are written to
-# wheels/${PROFILE}/ where PROFILE defaults to "kaggle/2xt4". To benefit
-# on subsequent sessions, commit the resulting .whl files back to the repo
-# (the bootstrap prints the exact command at the end).
+# Wheel cache (flash-attn only — it's the slow one):
+#   wheels/${WHEEL_PROFILE}/  (default: wheels/kaggle/2xt4)
+#
+# Lookup order is delegated to scripts/install_flash_attn.py:
+#   1. Local cache → 2. Community prebuilt (mjun0812/flash-attention-prebuild-wheels)
+#   → 3. Source build (slow fallback)
 
 set -euo pipefail
 
 PROFILE="${WHEEL_PROFILE:-kaggle/2xt4}"
 WHEEL_DIR="wheels/${PROFILE}"
-# T4 is sm_75; constrain the build so the wheel stays under GitHub's 100 MB
-# per-file limit. Override with TORCH_CUDA_ARCH_LIST if you're caching for
-# a different accelerator (e.g. "8.0" for A100, "8.9" for L4, "7.5;8.0" for
-# a multi-target cache).
 ARCH_LIST="${TORCH_CUDA_ARCH_LIST:-7.5}"
 
 mkdir -p "$WHEEL_DIR"
@@ -38,39 +36,11 @@ echo "==> profile: $PROFILE  (TORCH_CUDA_ARCH_LIST=$ARCH_LIST)"
 echo "==> installing pinned requirements"
 pip install -q -r requirements.txt
 
-# --- flash-attn: cache-aware install ---------------------------------------
-echo "==> flash-attn"
-FA_CACHED=$(ls "$WHEEL_DIR"/flash_attn-*.whl 2>/dev/null | head -1 || true)
-if [[ -n "$FA_CACHED" ]]; then
-  echo "  cached wheel found: $(basename "$FA_CACHED")"
-  if pip install -q --no-deps "$FA_CACHED"; then
-    echo "  installed from cache."
-  else
-    echo "  cached install failed — rebuilding."
-    FA_CACHED=""
-  fi
-fi
-if [[ -z "$FA_CACHED" ]]; then
-  echo "  building from source for sm_${ARCH_LIST/./} (slow; first time only)..."
-  if TORCH_CUDA_ARCH_LIST="$ARCH_LIST" \
-       pip wheel flash-attn --no-build-isolation -w "$WHEEL_DIR" >/tmp/fa-build.log 2>&1; then
-    FA_BUILT=$(ls -t "$WHEEL_DIR"/flash_attn-*.whl 2>/dev/null | head -1)
-    if [[ -n "$FA_BUILT" ]]; then
-      pip install -q --no-deps "$FA_BUILT" || echo "  install of fresh wheel failed"
-      FA_SIZE_MB=$(du -m "$FA_BUILT" | cut -f1)
-      echo "  built + installed: $(basename "$FA_BUILT") (${FA_SIZE_MB} MB)"
-      if [[ $FA_SIZE_MB -lt 95 ]]; then
-        echo "  → commit to skip the rebuild next time:"
-        echo "    git add $FA_BUILT && git commit -m 'cache: $(basename "$FA_BUILT")' && git push"
-      else
-        echo "  ⚠️ wheel is ${FA_SIZE_MB} MB — too big for direct git commit (>100 MB)."
-        echo "    Options: (a) narrow TORCH_CUDA_ARCH_LIST and rebuild, (b) git-lfs, (c) GitHub Release."
-      fi
-    fi
-  else
-    echo "  flash-attn build failed (see /tmp/fa-build.log); will fall back to SDPA"
-  fi
-fi
+echo "==> flash-attn (cache → community → source)"
+python scripts/install_flash_attn.py \
+  --cache-dir "$WHEEL_DIR" \
+  --arch-list "$ARCH_LIST" \
+  || echo "  install_flash_attn.py reported a non-zero exit; harness will fall back to SDPA"
 
 # --- DeepSpeed: usually has prebuilt wheels on PyPI ------------------------
 echo "==> DeepSpeed"

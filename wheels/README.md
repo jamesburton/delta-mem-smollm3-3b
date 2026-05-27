@@ -41,8 +41,30 @@ same notebook), set `TORCH_CUDA_ARCH_LIST="7.5;8.9"` — but expect the wheel
 to grow proportionally and possibly cross the 100 MB threshold; at that point
 you'll need to use a GitHub Release asset instead of a tracked file.
 
+## Where wheels come from
+
+The bootstrap delegates to `scripts/install_flash_attn.py`, which tries three
+sources in order:
+
+1. **This local cache** (`wheels/<profile>/`). If a matching wheel already lives
+   here, install in seconds, no network call.
+2. **Community prebuilt at [mjun0812/flash-attention-prebuild-wheels](https://github.com/mjun0812/flash-attention-prebuild-wheels)**.
+   The script queries the GitHub Releases API, finds a wheel matching the exact
+   `(cuda, torch, python, platform)` tuple of the current kernel, downloads it
+   into the local cache, then installs. Wheels are ~150-180 MB so this is a
+   one-time ~30 s network hit. After this step you can `git add` the downloaded
+   wheel and push it — future sessions skip the community lookup entirely.
+3. **Source build** as a last resort. Constrained to `TORCH_CUDA_ARCH_LIST=7.5`
+   for T4-only kernels to keep the resulting wheel under GitHub's 100 MB limit.
+
+The community wheels are *much* bigger than a T4-only source build (~170 MB vs
+~70 MB) because they target multiple compute capabilities. If repo size matters
+to you, prefer the source-build path and commit the slimmer wheel back.
+
 ## What's *not* cached here
 
 - Model weights (`.safetensors`, `.gguf`, etc.) — those go in HF Hub.
 - Regular PyPI wheels — those are already binary on PyPI and install fast.
 - Build artifacts other than the final `.whl`.
+- DeepSpeed — PyPI ships prebuilt wheels for most environments, so caching it
+  saves nothing.
