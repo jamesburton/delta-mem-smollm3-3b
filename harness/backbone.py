@@ -82,6 +82,38 @@ def _ensure_deltamem_importable():
     )
 
 
+def _resolve_device_args(device: str) -> Dict[str, Any]:
+    """Translate a high-level device strategy into kwargs for from_pretrained.
+
+    - "cpu":        device_map=None (load to CPU)
+    - "cuda":       device_map="cuda" (pin to cuda:0 — single-GPU machines)
+    - "auto"/"balanced": device_map="balanced" + per-GPU max_memory cap
+      that leaves headroom for activations and KV cache. Explicit cap is
+      necessary because accelerate's "auto" considers only the model size,
+      not the inference workspace it'll need afterwards.
+    """
+    if device == "cpu":
+        return {"device_map": None}
+    if device == "cuda":
+        return {"device_map": "cuda"}
+    if device in ("auto", "balanced"):
+        import torch
+        if not torch.cuda.is_available():
+            return {"device_map": None}
+        n = torch.cuda.device_count()
+        if n <= 1:
+            return {"device_map": "cuda"}
+        # Cap each GPU at ~80% of its real capacity so loading workspace +
+        # forward-pass activations have headroom. For a T4 (~15 GiB) this
+        # means ~12 GiB per GPU; the 4B model splits ~4 GB per GPU,
+        # leaving ~8 GB per GPU for activations / KV cache.
+        per_gpu_gib = int(torch.cuda.get_device_properties(0).total_memory * 0.80 / (1024**3))
+        max_memory = {i: f"{per_gpu_gib}GiB" for i in range(n)}
+        return {"device_map": "balanced", "max_memory": max_memory}
+    # Unknown — pass through verbatim (e.g. a custom dict-form device_map)
+    return {"device_map": device}
+
+
 def _resolve_adapter_dir(adapter_id_or_path: str) -> str:
     """Return a local directory containing the adapter.
 
@@ -103,11 +135,12 @@ def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any]:
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
+    device_kwargs = _resolve_device_args(cfg.device)
     model = AutoModelForCausalLM.from_pretrained(
         cfg.model_id,
         dtype=_torch_dtype(cfg.dtype),
         trust_remote_code=cfg.trust_remote_code,
-        device_map=cfg.device if cfg.device != "cpu" else None,
+        **device_kwargs,
     )
     model.eval()
 

@@ -11,10 +11,22 @@ def load_assistant(model_id: str, *, device: str = "cuda", dtype: str = "bfloat1
     from transformers import AutoModelForCausalLM
     import torch
     dtype_obj = getattr(torch, dtype)
+
+    # If user asked for multi-GPU split, pin the draft to the LAST GPU so it
+    # doesn't fight the (sharded) target for GPU 0. For single-GPU it goes
+    # wherever it asked.
+    if device in ("auto", "balanced") and torch.cuda.is_available():
+        n = torch.cuda.device_count()
+        device_map = f"cuda:{n - 1}" if n > 1 else "cuda"
+    elif device == "cpu":
+        device_map = None
+    else:
+        device_map = device
+
     model = AutoModelForCausalLM.from_pretrained(
         model_id,
         dtype=dtype_obj,
-        device_map=device if device != "cpu" else None,
+        device_map=device_map,
         trust_remote_code=True,
     )
     model.eval()

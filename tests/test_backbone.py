@@ -56,6 +56,15 @@ def test_ensure_deltamem_importable_finds_clone(monkeypatch, tmp_path):
     assert callable(load_fn)
 
 
+def test_resolve_device_args_returns_expected_shapes(monkeypatch):
+    import torch
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    assert backbone._resolve_device_args("cpu") == {"device_map": None}
+    assert backbone._resolve_device_args("cuda") == {"device_map": "cuda"}
+    # auto on no-CUDA falls back to None
+    assert backbone._resolve_device_args("auto") == {"device_map": None}
+
+
 @pytest.mark.gpu
 @pytest.mark.smoke
 def test_load_qwen3_4b_with_delta_mem():
