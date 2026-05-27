@@ -36,6 +36,10 @@ echo "==> profile: $PROFILE  (TORCH_CUDA_ARCH_LIST=$ARCH_LIST)"
 echo "==> installing pinned requirements"
 pip install -q -r requirements.txt
 
+echo "==> installing delta-Mem (upstream)"
+pip install -q "git+https://github.com/declare-lab/delta-Mem" \
+  || echo "  delta-Mem install failed; cells 2 and 7 will fail with a clear RuntimeError"
+
 echo "==> flash-attn (cache → community → source)"
 python scripts/install_flash_attn.py \
   --cache-dir "$WHEEL_DIR" \

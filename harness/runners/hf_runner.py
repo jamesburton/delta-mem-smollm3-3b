@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -74,10 +74,12 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
         delta_mem_adapter_id=rc.delta_mem_adapter_id,
     )
     memory.reset_peak_vram()
-    model, tok = load_backbone(bcfg)
-    asst = load_assistant(rc.assistant_model_id, device=rc.device, dtype=rc.dtype) \
-        if rc.assistant_model_id else None
+    model = None
+    asst = None
     try:
+        model, tok = load_backbone(bcfg)
+        asst = load_assistant(rc.assistant_model_id, device=rc.device, dtype=rc.dtype) \
+            if rc.assistant_model_id else None
         task = quality.make_multineedle_task(
             target_tokens=rc.target_tokens,
             n_needles=rc.n_needles,
@@ -149,7 +151,8 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
         return record
     finally:
         # Free GPU memory before returning so the notebook loop can move on cleanly
-        del model
+        if model is not None:
+            del model
         if asst is not None:
             del asst
         try:
