@@ -1,0 +1,12 @@
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra -q --strict-markers"
+markers = [
+    "gpu: requires a CUDA GPU (deselect with -m 'not gpu')",
+    "smoke: real-model smoke test (slow, deselect with -m 'not smoke')",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
