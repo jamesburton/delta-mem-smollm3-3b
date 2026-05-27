@@ -1,0 +1,7 @@
+{
+  "cell_id": "16",
+  "title": "SmolLM3-3B + SW-4K + \u03b4-Mem + spec-decode (full compound)",
+  "status": "scaffold-stub",
+  "note": "This is the scaffold. Implement runners under harness/runners/ to produce real metrics.",
+  "timestamp": "2026-05-27T15:15:06.362846Z"
+}
