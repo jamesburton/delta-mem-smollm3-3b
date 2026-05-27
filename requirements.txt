@@ -35,3 +35,11 @@ matplotlib>=3.9.0
 
 # Git automation from the notebook
 gitpython>=3.1.0
+
+# --- Kaggle compatibility pins ---
+# Kaggle's preinstalled rapids stack (cudf, cuml, dask-cuda, ucxx) pins numba
+# below 0.62 and numba-cuda below 0.23. We don't use numba ourselves, but
+# transitive deps from datasets/scipy can bump it. Hold it down so the
+# preinstalled GPU-DataFrame stack stays consistent and pip stops warning.
+numba<0.62
+numba-cuda<0.23,>=0.22.1
