@@ -130,6 +130,33 @@ def _resolve_adapter_dir(adapter_id_or_path: str) -> str:
     return snapshot_download(repo_id=adapter_id_or_path)
 
 
+def _attn_impl_for_hardware(requested: Optional[str]) -> Optional[str]:
+    """Filter requested attention impl by what the hardware actually supports.
+
+    FlashAttention-2 requires sm_80+ (Ampere or newer). On Turing GPUs
+    (T4 = sm_75) the kernel raises RuntimeError at first forward pass —
+    not at load — so silent fallback via from_pretrained's try/except
+    isn't enough. This gate prevents us from ever requesting FA2 when the
+    hardware can't run it.
+    """
+    if requested != "flash_attention_2":
+        return requested
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            return None
+        for i in range(torch.cuda.device_count()):
+            cap = torch.cuda.get_device_capability(i)
+            if cap[0] < 8:  # sm_80 = Ampere
+                print(f"  GPU {i} compute capability is sm_{cap[0]}{cap[1]} — "
+                      f"FlashAttention-2 needs sm_80+; falling back to SDPA")
+                return None
+        return "flash_attention_2"
+    except Exception as e:
+        print(f"  capability check failed ({e}); falling back to SDPA")
+        return None
+
+
 def _print_load_diagnostics(model) -> None:
     try:
         import torch
@@ -168,18 +195,17 @@ def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any]:
         trust_remote_code=cfg.trust_remote_code,
         **device_kwargs,
     )
+    effective_impl = _attn_impl_for_hardware(cfg.attn_implementation)
     model = None
-    if cfg.attn_implementation:
+    if effective_impl:
         try:
             model = AutoModelForCausalLM.from_pretrained(
                 cfg.model_id,
-                attn_implementation=cfg.attn_implementation,
+                attn_implementation=effective_impl,
                 **common,
             )
         except (ImportError, ValueError) as e:
-            # ImportError: flash-attn not installed
-            # ValueError: this architecture doesn't support the requested impl
-            print(f"  attn_implementation={cfg.attn_implementation} unavailable ({e}); "
+            print(f"  attn_implementation={effective_impl} unavailable ({e}); "
                   f"falling back to default (SDPA)")
     if model is None:
         model = AutoModelForCausalLM.from_pretrained(cfg.model_id, **common)

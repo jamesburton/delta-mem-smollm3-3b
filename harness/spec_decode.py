@@ -9,6 +9,7 @@ def load_assistant(model_id: str, *, device: str = "cuda", dtype: str = "bfloat1
     """Load a small draft model. Caller is responsible for vocab compatibility
     (same tokenizer family as the target)."""
     from transformers import AutoModelForCausalLM
+    from .backbone import _attn_impl_for_hardware
     import torch
     dtype_obj = getattr(torch, dtype)
 
@@ -28,13 +29,18 @@ def load_assistant(model_id: str, *, device: str = "cuda", dtype: str = "bfloat1
         device_map=device_map,
         trust_remote_code=True,
     )
-    try:
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            attn_implementation="flash_attention_2",
-            **common,
-        )
-    except (ImportError, ValueError):
+    impl = _attn_impl_for_hardware("flash_attention_2")
+    model = None
+    if impl:
+        try:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                attn_implementation=impl,
+                **common,
+            )
+        except (ImportError, ValueError):
+            pass
+    if model is None:
         model = AutoModelForCausalLM.from_pretrained(model_id, **common)
     model.eval()
     return model

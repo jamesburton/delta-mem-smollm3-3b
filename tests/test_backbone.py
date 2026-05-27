@@ -80,6 +80,28 @@ def test_load_backbone_falls_back_when_flash_attn_unavailable(tiny_model_id, mon
     assert tok is not None
 
 
+def test_attn_impl_for_hardware_filters_fa2_on_turing(monkeypatch):
+    """On a Turing GPU (sm_75), FA2 should be filtered out to None."""
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda i: (7, 5))
+    assert backbone._attn_impl_for_hardware("flash_attention_2") is None
+
+
+def test_attn_impl_for_hardware_passes_fa2_on_ampere(monkeypatch):
+    """On an Ampere+ GPU (sm_80+), FA2 should pass through."""
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda i: (8, 0))
+    assert backbone._attn_impl_for_hardware("flash_attention_2") == "flash_attention_2"
+
+
+def test_attn_impl_for_hardware_passes_through_non_fa2(monkeypatch):
+    """Other impls (sdpa, eager) are not filtered."""
+    assert backbone._attn_impl_for_hardware("sdpa") == "sdpa"
+    assert backbone._attn_impl_for_hardware(None) is None
+
+
 @pytest.mark.gpu
 @pytest.mark.smoke
 def test_load_qwen3_4b_with_delta_mem():
