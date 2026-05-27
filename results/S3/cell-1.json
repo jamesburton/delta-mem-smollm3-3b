@@ -1,7 +1,0 @@
-{
-  "cell_id": "1",
-  "title": "Qwen3-4B vanilla full attention",
-  "status": "failed",
-  "error": "RuntimeError('FlashAttention only supports Ampere GPUs or newer.')",
-  "timestamp": "2026-05-27T19:39:56.628463Z"
-}

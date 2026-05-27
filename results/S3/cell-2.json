@@ -1,7 +1,0 @@
-{
-  "cell_id": "2",
-  "title": "Qwen3-4B + \u03b4-Mem adapter",
-  "status": "failed",
-  "error": "RuntimeError('FlashAttention only supports Ampere GPUs or newer.')",
-  "timestamp": "2026-05-27T19:40:06.690566Z"
-}

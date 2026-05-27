@@ -1,7 +1,0 @@
-{
-  "cell_id": "16",
-  "title": "SmolLM3-3B + SW-4K + \u03b4-Mem + spec-decode (full compound)",
-  "status": "phase-2-plus",
-  "note": "Not implemented in Phase 1. See docs/spec.md.",
-  "timestamp": "2026-05-27T19:40:39.870315Z"
-}
