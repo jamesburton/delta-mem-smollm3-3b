@@ -1,3 +1,8 @@
 pytest>=8.0
 pytest-cov>=5.0
 ruff>=0.7
+
+# conftest.py imports torch at module level for CUDA detection in
+# pytest_collection_modifyitems. Pinned here so a clean dev-only install
+# does not crash at collection time.
+torch>=2.0

@@ -1,8 +1,13 @@
 """Shared fixtures.
 
-We avoid loading the real 4B base in unit tests — use sshleifer/tiny-gpt2
-(~5 MB) as a structurally-similar stand-in. Real-model tests are gated by
-the `smoke` mark and the `RUN_SMOKE` env var.
+We avoid loading the real 4B base in unit tests — use a Llama-style tiny
+random model as a structurally-similar stand-in. Its config exposes the
+modern attribute schema (`hidden_size`, `num_key_value_heads`,
+`num_hidden_layers`, `num_attention_heads`) that Qwen3 and SmolLM3 also
+use, so metric tests that read `model.config` work against the same API
+the real backbones expose.
+
+Real-model tests are gated by the `smoke` mark and the `RUN_SMOKE` env var.
 """
 
 import os
@@ -12,7 +17,7 @@ import torch
 
 @pytest.fixture(scope="session")
 def tiny_model_id() -> str:
-    return "sshleifer/tiny-gpt2"
+    return "hf-internal-testing/tiny-random-LlamaForCausalLM"
 
 
 @pytest.fixture(scope="session")
