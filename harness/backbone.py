@@ -30,6 +30,7 @@ class BackboneConfig:
     device: str = "cuda"
     delta_mem_adapter_id: Optional[str] = None
     trust_remote_code: bool = True
+    attn_implementation: Optional[str] = "flash_attention_2"  # falls back via try/except if unavailable
 
     def as_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -136,12 +137,26 @@ def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any]:
         tok.pad_token = tok.eos_token
 
     device_kwargs = _resolve_device_args(cfg.device)
-    model = AutoModelForCausalLM.from_pretrained(
-        cfg.model_id,
+    common = dict(
         dtype=_torch_dtype(cfg.dtype),
         trust_remote_code=cfg.trust_remote_code,
         **device_kwargs,
     )
+    model = None
+    if cfg.attn_implementation:
+        try:
+            model = AutoModelForCausalLM.from_pretrained(
+                cfg.model_id,
+                attn_implementation=cfg.attn_implementation,
+                **common,
+            )
+        except (ImportError, ValueError) as e:
+            # ImportError: flash-attn not installed
+            # ValueError: this architecture doesn't support the requested impl
+            print(f"  attn_implementation={cfg.attn_implementation} unavailable ({e}); "
+                  f"falling back to default (SDPA)")
+    if model is None:
+        model = AutoModelForCausalLM.from_pretrained(cfg.model_id, **common)
     model.eval()
 
     if cfg.delta_mem_adapter_id:

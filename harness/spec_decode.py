@@ -23,12 +23,19 @@ def load_assistant(model_id: str, *, device: str = "cuda", dtype: str = "bfloat1
     else:
         device_map = device
 
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
+    common = dict(
         dtype=dtype_obj,
         device_map=device_map,
         trust_remote_code=True,
     )
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            attn_implementation="flash_attention_2",
+            **common,
+        )
+    except (ImportError, ValueError):
+        model = AutoModelForCausalLM.from_pretrained(model_id, **common)
     model.eval()
     return model
 

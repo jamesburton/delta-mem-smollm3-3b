@@ -65,6 +65,21 @@ def test_resolve_device_args_returns_expected_shapes(monkeypatch):
     assert backbone._resolve_device_args("auto") == {"device_map": None}
 
 
+def test_load_backbone_falls_back_when_flash_attn_unavailable(tiny_model_id, monkeypatch):
+    """Loading a CPU tiny model with FA2 requested should silently fall back."""
+    cfg = backbone.BackboneConfig(
+        model_id=tiny_model_id,
+        dtype="float32",
+        device="cpu",
+        delta_mem_adapter_id=None,
+        attn_implementation="flash_attention_2",  # likely unsupported on CPU + tiny LLaMA
+    )
+    # Should NOT raise; either FA2 works (unlikely on CPU) or fallback kicks in
+    model, tok = backbone.load_backbone(cfg)
+    assert model is not None
+    assert tok is not None
+
+
 @pytest.mark.gpu
 @pytest.mark.smoke
 def test_load_qwen3_4b_with_delta_mem():
