@@ -1,0 +1,7 @@
+{
+  "cell_id": "9b",
+  "title": "Qwen3.5-4B-MTP-GGUF Q5_K_M",
+  "status": "phase-2-plus",
+  "note": "Not implemented in Phase 1. See docs/spec.md.",
+  "timestamp": "2026-05-27T19:40:30.828426Z"
+}
