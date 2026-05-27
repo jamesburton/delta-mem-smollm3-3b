@@ -1,0 +1,7 @@
+{
+  "cell_id": "7",
+  "title": "Qwen3-4B + \u03b4-Mem + spec-decode",
+  "status": "failed",
+  "error": "OutOfMemoryError('CUDA out of memory. Tried to allocate 3.90 GiB. GPU 0 has a total capacity of 14.56 GiB of which 949.81 MiB is free. Including non-PyTorch memory, this process has 13.63 GiB memory in use. Of the allocated memory 13.47 GiB is allocated by PyTorch, and 41.68 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://pytorch.org/docs/stable/notes/cuda.html#environment-variables)')",
+  "timestamp": "2026-05-27T18:15:09.060373Z"
+}
