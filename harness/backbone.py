@@ -43,7 +43,7 @@ def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any]:
 
     model = AutoModelForCausalLM.from_pretrained(
         cfg.model_id,
-        torch_dtype=_torch_dtype(cfg.dtype),
+        dtype=_torch_dtype(cfg.dtype),
         trust_remote_code=cfg.trust_remote_code,
         device_map=cfg.device if cfg.device != "cpu" else None,
     )
