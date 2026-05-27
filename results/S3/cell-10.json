@@ -1,7 +1,0 @@
-{
-  "cell_id": "10",
-  "title": "Qwen3-4B + StreamingLLM sink+SW-4K + \u03b4-Mem",
-  "status": "phase-2-plus",
-  "note": "Not implemented in Phase 1. See docs/spec.md.",
-  "timestamp": "2026-05-27T20:26:39.588600Z"
-}
