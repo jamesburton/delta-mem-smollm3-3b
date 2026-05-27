@@ -16,13 +16,15 @@ def kv_bytes(
     sliding_window: Optional[int] = None,
 ) -> int:
     """Bytes the KV cache occupies for one stream at this seq_len."""
-    effective_len = min(seq_len, sliding_window) if sliding_window else seq_len
+    effective_len = min(seq_len, sliding_window) if sliding_window is not None else seq_len
     return num_hidden_layers * num_key_value_heads * head_dim * effective_len * dtype_bytes * 2
 
 
 def kv_bytes_from_config(cfg, *, seq_len: int, dtype_bytes: int = 2,
                          sliding_window: Optional[int] = None) -> int:
-    n_kv = getattr(cfg, "num_key_value_heads", None) or cfg.num_attention_heads
+    n_kv = getattr(cfg, "num_key_value_heads", None)
+    if n_kv is None:
+        n_kv = cfg.num_attention_heads
     head_dim = cfg.hidden_size // cfg.num_attention_heads
     return kv_bytes(
         num_hidden_layers=cfg.num_hidden_layers,

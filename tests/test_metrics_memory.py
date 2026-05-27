@@ -33,3 +33,24 @@ def test_kv_bytes_from_config_uses_correct_attributes():
     head_dim = cfg.hidden_size // cfg.num_attention_heads
     expected = cfg.num_hidden_layers * cfg.num_key_value_heads * head_dim * 2048 * 2 * 2
     assert n == expected
+
+
+def test_kv_bytes_sliding_window_zero_treated_as_window_zero_not_disabled():
+    # sliding_window=0 should mean "window of zero tokens", not "no window"
+    n = memory.kv_bytes(num_hidden_layers=2, num_key_value_heads=1, head_dim=8,
+                        seq_len=1024, dtype_bytes=2, sliding_window=0)
+    assert n == 0
+
+
+def test_kv_bytes_from_config_with_num_key_value_heads_zero_falls_back():
+    # Defensive: a malformed config with num_key_value_heads=0 should NOT
+    # silently fall back to num_attention_heads — but our current contract
+    # is to honour what's set. Document by asserting current behaviour.
+    class _CfgBad:
+        num_hidden_layers = 2
+        num_key_value_heads = 0    # malformed
+        num_attention_heads = 4
+        hidden_size = 32
+    n = memory.kv_bytes_from_config(_CfgBad(), seq_len=128, dtype_bytes=2)
+    # 0 KV heads → 0 bytes (honour the value)
+    assert n == 0
