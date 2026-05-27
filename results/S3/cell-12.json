@@ -1,0 +1,7 @@
+{
+  "cell_id": "12",
+  "title": "SmolLM3-3B vanilla baseline",
+  "status": "scaffold-stub",
+  "note": "This is the scaffold. Implement runners under harness/runners/ to produce real metrics.",
+  "timestamp": "2026-05-27T15:15:00.613051Z"
+}
