@@ -1,7 +1,0 @@
-{
-  "cell_id": "9a",
-  "title": "Qwen3.5-4B-MTP-GGUF Q4_K_M",
-  "status": "scaffold-stub",
-  "note": "This is the scaffold. Implement runners under harness/runners/ to produce real metrics.",
-  "timestamp": "2026-05-27T15:14:52.539196Z"
-}

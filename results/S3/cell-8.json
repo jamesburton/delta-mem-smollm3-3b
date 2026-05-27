@@ -1,7 +1,0 @@
-{
-  "cell_id": "8",
-  "title": "Qwen3-4B + SW-4K + \u03b4-Mem + spec-decode",
-  "status": "scaffold-stub",
-  "note": "This is the scaffold. Implement runners under harness/runners/ to produce real metrics.",
-  "timestamp": "2026-05-27T15:14:51.050221Z"
-}

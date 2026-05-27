@@ -1,7 +1,0 @@
-{
-  "cell_id": "2",
-  "title": "Qwen3-4B + \u03b4-Mem adapter",
-  "status": "scaffold-stub",
-  "note": "This is the scaffold. Implement runners under harness/runners/ to produce real metrics.",
-  "timestamp": "2026-05-27T15:14:43.753241Z"
-}

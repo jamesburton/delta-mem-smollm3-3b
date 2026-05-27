@@ -1,7 +1,0 @@
-{
-  "cell_id": "T1",
-  "title": "Train \u03b4-Mem adapter for SmolLM3-3B",
-  "status": "scaffold-stub",
-  "note": "This is the scaffold. Implement runners under harness/runners/ to produce real metrics.",
-  "timestamp": "2026-05-27T15:14:59.263360Z"
-}

@@ -1,7 +1,0 @@
-{
-  "cell_id": "10",
-  "title": "Qwen3-4B + StreamingLLM sink+SW-4K + \u03b4-Mem",
-  "status": "scaffold-stub",
-  "note": "This is the scaffold. Implement runners under harness/runners/ to produce real metrics.",
-  "timestamp": "2026-05-27T15:14:56.781381Z"
-}
