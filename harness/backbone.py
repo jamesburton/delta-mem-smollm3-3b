@@ -5,14 +5,24 @@ reference repo that you clone and either install its `requirements.txt` or
 put on `PYTHONPATH`. `scripts/kaggle_bootstrap.sh` does that automatically
 under `.deps/delta-Mem`; this module finds the clone at import time.
 
-The public API (per upstream README) is:
-    from deltamem.core import HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter
-    config = HFDeltaMemConfig.from_pretrained(adapter_dir)
-    attach_delta_mem(model, config)
-    load_delta_mem_adapter(model, adapter_dir)
+With a δ-Mem adapter, loading is delegated entirely to the upstream runtime:
+
+    from deltamem.runtime.session import DeltaMemChatSession, load_delta_mem_chat_model
+    model, tokenizer = load_delta_mem_chat_model(
+        model_path=local_base_model_path,
+        device="cuda:0",
+        dtype="bfloat16",
+        attn_implementation=None,
+        adapter_dir=local_adapter_dir,
+    )
+    session = DeltaMemChatSession(model=model, tokenizer=tokenizer, device="cuda:0")
+    result = session.generate_reply(user_text="...", max_new_tokens=256)
+    # result["assistant"] is the reply
 
 Note that `adapter_dir` is a LOCAL directory, not an HF Hub id; we
-`snapshot_download` the adapter on demand.
+`snapshot_download` the adapter on demand. The upstream runtime also requires
+`local_files_only=True` for the base model, so we pre-download it via
+`snapshot_download` before calling `load_delta_mem_chat_model`.
 """
 
 from __future__ import annotations
@@ -55,25 +65,22 @@ def _candidate_deltamem_roots():
 
 
 def _ensure_deltamem_importable():
-    """Import deltamem.core; on ImportError, look for a clone and retry.
+    """Ensure the deltamem package is on sys.path; on ImportError, look for a clone and retry.
 
-    Returns (HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter).
+    After this call, `from deltamem.runtime.session import ...` and
+    `from deltamem.core import ...` are both importable.
     """
     try:
-        from deltamem.core import (  # type: ignore
-            HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter,
-        )
-        return HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter
+        import deltamem  # type: ignore  # noqa: F401
+        return
     except ImportError:
         pass
     for candidate in _candidate_deltamem_roots():
         if (candidate / "deltamem").is_dir():
             sys.path.insert(0, str(candidate))
             try:
-                from deltamem.core import (  # type: ignore
-                    HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter,
-                )
-                return HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter
+                import deltamem  # type: ignore  # noqa: F401
+                return
             except ImportError:
                 sys.path.pop(0)
                 continue
@@ -181,8 +188,19 @@ def _print_load_diagnostics(model) -> None:
         print(f"  (diagnostics failed: {e})")
 
 
-def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any]:
-    """Return (model, tokenizer). Attaches δ-Mem if `cfg.delta_mem_adapter_id` is set."""
+def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any, Optional[Any]]:
+    """Return (model, tokenizer, delta_mem_session_or_None).
+
+    With delta_mem_adapter_id set, this delegates to the upstream δ-Mem
+    runtime which constructs a stateful DeltaMemChatSession. Without an
+    adapter, this returns a plain HF model + tokenizer (session=None).
+    """
+    if cfg.delta_mem_adapter_id:
+        return _load_with_delta_mem(cfg)
+    return _load_plain(cfg)
+
+
+def _load_plain(cfg: BackboneConfig) -> Tuple[Any, Any, None]:
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     tok = AutoTokenizer.from_pretrained(cfg.model_id, trust_remote_code=cfg.trust_remote_code)
@@ -200,25 +218,53 @@ def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any]:
     if effective_impl:
         try:
             model = AutoModelForCausalLM.from_pretrained(
-                cfg.model_id,
-                attn_implementation=effective_impl,
-                **common,
+                cfg.model_id, attn_implementation=effective_impl, **common,
             )
         except (ImportError, ValueError) as e:
-            print(f"  attn_implementation={effective_impl} unavailable ({e}); "
-                  f"falling back to default (SDPA)")
+            print(f"  attn_implementation={effective_impl} unavailable ({e}); falling back to SDPA")
     if model is None:
         model = AutoModelForCausalLM.from_pretrained(cfg.model_id, **common)
     model.eval()
-
-    # Diagnostics: did accelerate actually split the model, and what's the
-    # GPU memory footprint right after load?
     _print_load_diagnostics(model)
+    return model, tok, None
 
-    if cfg.delta_mem_adapter_id:
-        HFDeltaMemConfig, attach_delta_mem, load_delta_mem_adapter = _ensure_deltamem_importable()
-        adapter_dir = _resolve_adapter_dir(cfg.delta_mem_adapter_id)
-        dm_config = HFDeltaMemConfig.from_pretrained(adapter_dir)
-        attach_delta_mem(model, dm_config)
-        load_delta_mem_adapter(model, adapter_dir)
-    return model, tok
+
+def _load_with_delta_mem(cfg: BackboneConfig) -> Tuple[Any, Any, Any]:
+    """Use upstream's DeltaMemChatSession (stateful runtime)."""
+    _ensure_deltamem_importable()
+    from deltamem.runtime.session import DeltaMemChatSession, load_delta_mem_chat_model  # type: ignore
+
+    adapter_dir = _resolve_adapter_dir(cfg.delta_mem_adapter_id)
+    effective_impl = _attn_impl_for_hardware(cfg.attn_implementation)
+    # Upstream uses single-device device_map; cap at one GPU.
+    if cfg.device in ("auto", "balanced"):
+        # Prefer cuda:0 for δ-Mem; the runtime keeps state on one device.
+        device = "cuda:0" if _has_cuda() else "cpu"
+        print(f"  δ-Mem requires single-device placement; using {device}")
+    else:
+        device = cfg.device
+
+    # Workaround upstream's `local_files_only=True`: pre-download the base
+    # model via snapshot_download so the call succeeds offline.
+    from huggingface_hub import snapshot_download
+    print(f"  resolving base model {cfg.model_id} to local cache...")
+    model_local = snapshot_download(repo_id=cfg.model_id)
+
+    model, tok = load_delta_mem_chat_model(
+        model_path=model_local,
+        device=device,
+        dtype=cfg.dtype,
+        attn_implementation=effective_impl,
+        adapter_dir=adapter_dir,
+    )
+    session = DeltaMemChatSession(model=model, tokenizer=tok, device=device)
+    _print_load_diagnostics(model)
+    return model, tok, session
+
+
+def _has_cuda() -> bool:
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except ImportError:
+        return False

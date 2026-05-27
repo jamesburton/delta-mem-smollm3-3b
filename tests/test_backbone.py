@@ -7,9 +7,10 @@ from harness import backbone
 def test_load_tiny_backbone_returns_model_and_tokenizer(tiny_model_id):
     cfg = backbone.BackboneConfig(model_id=tiny_model_id, dtype="float32", device="cpu",
                                    delta_mem_adapter_id=None)
-    model, tok = backbone.load_backbone(cfg)
+    model, tok, session = backbone.load_backbone(cfg)
     assert model is not None
     assert tok is not None
+    assert session is None  # no adapter requested
     # Basic forward sanity
     out = model(**tok("hello world", return_tensors="pt"))
     assert out.logits.ndim == 3
@@ -42,18 +43,15 @@ def test_ensure_deltamem_importable_finds_clone(monkeypatch, tmp_path):
 
     # Force the helper to look only at our tmp clone
     monkeypatch.setattr(backbone, "_candidate_deltamem_roots", lambda: [fake_root])
-    # Make sure a real deltamem isn't preempting us
-    monkeypatch.setitem(__import__("sys").modules, "deltamem", None)
-    monkeypatch.setitem(__import__("sys").modules, "deltamem.core", None)
-    # Clear any prior partial import state
+    # Clear any prior partial import state so our fake package wins
     for mod in list(__import__("sys").modules):
         if mod.startswith("deltamem"):
             del __import__("sys").modules[mod]
 
-    HFDeltaMemConfig, attach_fn, load_fn = backbone._ensure_deltamem_importable()
-    assert HFDeltaMemConfig is not None
-    assert callable(attach_fn)
-    assert callable(load_fn)
+    # Should not raise; returns None on success
+    backbone._ensure_deltamem_importable()
+    import deltamem  # type: ignore  # noqa: F401
+    assert deltamem is not None
 
 
 def test_resolve_device_args_returns_expected_shapes(monkeypatch):
@@ -75,9 +73,10 @@ def test_load_backbone_falls_back_when_flash_attn_unavailable(tiny_model_id, mon
         attn_implementation="flash_attention_2",  # likely unsupported on CPU + tiny LLaMA
     )
     # Should NOT raise; either FA2 works (unlikely on CPU) or fallback kicks in
-    model, tok = backbone.load_backbone(cfg)
+    model, tok, session = backbone.load_backbone(cfg)
     assert model is not None
     assert tok is not None
+    assert session is None
 
 
 def test_attn_impl_for_hardware_filters_fa2_on_turing(monkeypatch):
@@ -108,8 +107,9 @@ def test_load_qwen3_4b_with_delta_mem():
     cfg = backbone.BackboneConfig(
         model_id="Qwen/Qwen3-4B-Instruct-2507",
         dtype="bfloat16",
-        device="cuda",
+        device="cuda:0",  # δ-Mem path uses single device
         delta_mem_adapter_id="declare-lab/delta-mem_qwen3_4b-instruct",
     )
-    model, tok = backbone.load_backbone(cfg)
-    assert hasattr(model, "delta_mem") or "delta" in str(type(model)).lower()
+    model, tok, session = backbone.load_backbone(cfg)
+    assert session is not None
+    assert hasattr(session, "generate_reply")

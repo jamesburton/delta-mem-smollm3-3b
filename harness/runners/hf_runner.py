@@ -86,22 +86,42 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
         pass
     model = None
     asst = None
+    session = None
     try:
-        model, tok = load_backbone(bcfg)
+        model, tok, session = load_backbone(bcfg)
         asst = load_assistant(rc.assistant_model_id, device=rc.device, dtype=rc.dtype) \
-            if rc.assistant_model_id else None
+            if rc.assistant_model_id and session is None else None
+        # Note: if session is set, we don't currently support spec-decode + δ-Mem in
+        # one shot — the upstream runtime doesn't expose that combo. Cell 7 will run
+        # δ-Mem but without spec-decode.
+        if session is not None and rc.assistant_model_id:
+            print(f"  ⚠️ cell {cell.id}: δ-Mem + spec-decode is not yet supported by the upstream runtime; running δ-Mem only")
+
         task = quality.make_multineedle_task(
             target_tokens=rc.target_tokens,
             n_needles=rc.n_needles,
             seed=rc.seed,
         )
-        prompt = task.context + "\n\n" + task.question
 
-        if asst is not None:
-            answer = generate_with_spec_decode(model, tok, asst, prompt=prompt,
-                                                max_new_tokens=rc.max_new_tokens)
+        if session is not None:
+            # δ-Mem path: feed the entire NIH prompt as a single user message.
+            # The session's generate_reply tokenizes via chat template, runs the
+            # write phase (context flows into the online memory state), then
+            # decodes the answer with write disabled.
+            reply = session.generate_reply(
+                user_text=task.context + "\n\n" + task.question,
+                max_new_tokens=rc.max_new_tokens,
+            )
+            answer = reply["assistant"]
+        elif asst is not None:
+            answer = generate_with_spec_decode(
+                model, tok, asst,
+                prompt=task.context + "\n\n" + task.question,
+                max_new_tokens=rc.max_new_tokens,
+            )
         else:
             import torch
+            prompt = task.context + "\n\n" + task.question
             inputs = tok(prompt, return_tensors="pt").to(next(model.parameters()).device)
             with torch.no_grad():
                 out = model.generate(**inputs, max_new_tokens=rc.max_new_tokens, do_sample=False)
@@ -109,6 +129,10 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
 
         nih_score = quality.score_multineedle(task, answer)
 
+        # Speed timing uses plain generate even for δ-Mem cells — measuring the
+        # session's generate_reply path would require a separate timing harness
+        # (the session does write-phase ingest + decode separately, both of which
+        # affect tok/s). Phase 2 follow-up.
         speed_record = speed.timed_generation(
             model, tok, prompt="The capital of France is",
             max_new_tokens=min(64, rc.max_new_tokens),
@@ -165,6 +189,8 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
             del model
         if asst is not None:
             del asst
+        if session is not None:
+            del session
         try:
             import torch
             if torch.cuda.is_available():
