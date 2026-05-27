@@ -1,0 +1,7 @@
+{
+  "cell_id": "5",
+  "title": "Qwen3-4B + SW-2K + \u03b4-Mem",
+  "status": "phase-2-plus",
+  "note": "Not implemented in Phase 1. See docs/spec.md.",
+  "timestamp": "2026-05-27T19:23:45.104008Z"
+}
