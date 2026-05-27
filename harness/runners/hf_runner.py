@@ -66,6 +66,12 @@ def _utc_now_iso() -> str:
 
 
 def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
+    # Quiet transformers' verbose generation_config warnings during the run.
+    # Hundreds of these would otherwise spam the dispatch loop for spec-decode.
+    import logging
+    logging.getLogger("transformers.generation").setLevel(logging.ERROR)
+    logging.getLogger("transformers.generation.configuration_utils").setLevel(logging.ERROR)
+
     rc = _resolve_cell_config(cell, base_cfg)
 
     bcfg = BackboneConfig(
@@ -184,16 +190,20 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
 
         return record
     finally:
-        # Free GPU memory before returning so the notebook loop can move on cleanly
-        if model is not None:
-            del model
+        import gc
+        # Drop references explicitly (assignment to None breaks any internal
+        # cycles before gc.collect runs).
+        model = None
+        tok = None
         if asst is not None:
-            del asst
+            asst = None
         if session is not None:
-            del session
+            session = None
+        gc.collect()
         try:
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.ipc_collect()
         except ImportError:
             pass
