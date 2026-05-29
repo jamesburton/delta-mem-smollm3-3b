@@ -4,9 +4,10 @@
   "stage": "S3",
   "wall_clock_budget_seconds": 28800,
   "completed_cells": [
-    "1"
+    "1",
+    "2"
   ],
   "current_cell": null,
-  "last_checkpoint_at": 1780052224.7170324,
-  "wall_clock_elapsed_seconds": 66.80069828033447
+  "last_checkpoint_at": 1780052266.972485,
+  "wall_clock_elapsed_seconds": 109.05613946914673
 }
