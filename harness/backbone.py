@@ -147,11 +147,13 @@ def _resolve_adapter_dir(adapter_id_or_path: str) -> str:
 def _attn_impl_for_hardware(requested: Optional[str]) -> Optional[str]:
     """Filter requested attention impl by what the hardware actually supports.
 
-    FlashAttention-2 requires sm_80+ (Ampere or newer). On Turing GPUs
-    (T4 = sm_75) the kernel raises RuntimeError at first forward pass —
-    not at load — so silent fallback via from_pretrained's try/except
-    isn't enough. This gate prevents us from ever requesting FA2 when the
-    hardware can't run it.
+    FlashAttention-2 requires sm_80+ (Ampere or newer). On Turing (T4 = sm_75)
+    FA2 raises RuntimeError at first forward — not at load — so silent
+    fallback via from_pretrained's try/except isn't enough.
+
+    When FA2 isn't viable, we return "sdpa" explicitly rather than None so
+    transformers definitely engages PyTorch's SDP path (and we can then
+    configure PyTorch's SDP backend preferences via configure_sdp_backends).
     """
     if requested != "flash_attention_2":
         return requested
@@ -161,14 +163,43 @@ def _attn_impl_for_hardware(requested: Optional[str]) -> Optional[str]:
             return None
         for i in range(torch.cuda.device_count()):
             cap = torch.cuda.get_device_capability(i)
-            if cap[0] < 8:  # sm_80 = Ampere
+            if cap[0] < 8:
                 print(f"  GPU {i} compute capability is sm_{cap[0]}{cap[1]} — "
-                      f"FlashAttention-2 needs sm_80+; falling back to SDPA")
-                return None
+                      f"FlashAttention-2 needs sm_80+; using SDPA mem-efficient")
+                return "sdpa"
         return "flash_attention_2"
     except Exception as e:
         print(f"  capability check failed ({e}); falling back to SDPA")
-        return None
+        return "sdpa"
+
+
+def configure_sdp_backends() -> None:
+    """Prefer PyTorch's memory-efficient SDP kernel over the math kernel.
+
+    On Turing GPUs (T4) PyTorch defaults to the math kernel for SDPA, which
+    materializes the full N×N attention matrix — OOMs at 4K+ context on a
+    15GB T4. The mem-efficient kernel computes attention in tiled chunks
+    with O(N) peak memory. We keep math enabled as a last-resort fallback
+    for shapes the mem-efficient kernel can't handle.
+
+    On Ampere+ this is a no-op in practice because FA2 takes precedence
+    anyway, but we still configure it for safety.
+    """
+    try:
+        import torch
+        # Order of preference: flash > mem_efficient > math
+        torch.backends.cuda.enable_flash_sdp(True)
+        torch.backends.cuda.enable_mem_efficient_sdp(True)
+        torch.backends.cuda.enable_math_sdp(True)
+        # If `enable_cudnn_sdp` is available (PyTorch >= 2.4), enable it too
+        # — it's another efficient backend on some hardware.
+        if hasattr(torch.backends.cuda, "enable_cudnn_sdp"):
+            torch.backends.cuda.enable_cudnn_sdp(True)
+        print(f"  SDP backends: flash={torch.backends.cuda.flash_sdp_enabled()}, "
+              f"mem_efficient={torch.backends.cuda.mem_efficient_sdp_enabled()}, "
+              f"math={torch.backends.cuda.math_sdp_enabled()}")
+    except Exception as e:
+        print(f"  configure_sdp_backends failed ({e}); using PyTorch defaults")
 
 
 def _print_load_diagnostics(model) -> None:
@@ -202,6 +233,7 @@ def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any, Optional[Any]]:
     runtime which constructs a stateful DeltaMemChatSession. Without an
     adapter, this returns a plain HF model + tokenizer (session=None).
     """
+    configure_sdp_backends()  # set up before any from_pretrained call
     if cfg.delta_mem_adapter_id:
         return _load_with_delta_mem(cfg)
     return _load_plain(cfg)

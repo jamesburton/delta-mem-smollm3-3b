@@ -95,11 +95,11 @@ def test_load_backbone_falls_back_when_flash_attn_unavailable(tiny_model_id, mon
 
 
 def test_attn_impl_for_hardware_filters_fa2_on_turing(monkeypatch):
-    """On a Turing GPU (sm_75), FA2 should be filtered out to None."""
+    """On a Turing GPU (sm_75), FA2 should be filtered to 'sdpa' (explicit)."""
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda i: (7, 5))
-    assert backbone._attn_impl_for_hardware("flash_attention_2") is None
+    assert backbone._attn_impl_for_hardware("flash_attention_2") == "sdpa"
 
 
 def test_attn_impl_for_hardware_passes_fa2_on_ampere(monkeypatch):
@@ -114,6 +114,13 @@ def test_attn_impl_for_hardware_passes_through_non_fa2(monkeypatch):
     """Other impls (sdpa, eager) are not filtered."""
     assert backbone._attn_impl_for_hardware("sdpa") == "sdpa"
     assert backbone._attn_impl_for_hardware(None) is None
+
+
+def test_configure_sdp_backends_runs_without_error():
+    """Should be a no-op on CPU but not raise."""
+    # Just verify it doesn't crash; the actual backend toggles only fire
+    # when CUDA is available.
+    backbone.configure_sdp_backends()
 
 
 @pytest.mark.gpu
