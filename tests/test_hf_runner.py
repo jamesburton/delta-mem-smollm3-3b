@@ -7,6 +7,8 @@ without any GPU or large model dependency.
 import json
 from pathlib import Path
 
+import pytest
+
 from harness.runners import hf_runner
 from harness.cells import Cell
 
@@ -37,3 +39,19 @@ def test_run_one_cell_writes_complete_record(tmp_path, tiny_model_id):
     assert "fraction" in q
     # Status is something we can pattern-match on
     assert record["status"] in {"ok", "partial", "failed"}
+
+
+def test_finally_block_tolerates_modules_without_hooks(tiny_lm):
+    """remove_hook_from_module should be a safe no-op on plain modules.
+
+    Regression guard for the leak-fix code path — we want this to silently
+    succeed even when the model has no accelerate hooks attached (which is
+    the case for tiny-Llama loaded onto CPU).
+
+    Skipped automatically when accelerate is not installed (the production
+    finally block guards the same import with except ImportError)."""
+    pytest.importorskip("accelerate")
+    from accelerate.hooks import remove_hook_from_module
+    model, tok = tiny_lm
+    # Should not raise
+    remove_hook_from_module(model, recurse=True)

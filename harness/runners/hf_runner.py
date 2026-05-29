@@ -191,19 +191,37 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
         return record
     finally:
         import gc
-        # Drop references explicitly (assignment to None breaks any internal
-        # cycles before gc.collect runs).
+        # Strip accelerate forward hooks so the modules can actually be
+        # garbage collected. Without this, the sharded model's per-layer
+        # hooks hold references that survive 'del model' and accumulate
+        # GPU memory across cells.
+        for _obj in (model, asst):
+            if _obj is not None:
+                try:
+                    from accelerate.hooks import remove_hook_from_module
+                    remove_hook_from_module(_obj, recurse=True)
+                except (ImportError, Exception):
+                    pass
+
+        # Drop references explicitly
         model = None
         tok = None
         if asst is not None:
             asst = None
         if session is not None:
             session = None
-        gc.collect()
+
+        # accelerate.utils.release_memory is designed for exactly this case:
+        # it gc.collects + empty_caches + ipc_collects across all devices.
         try:
-            import torch
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                torch.cuda.ipc_collect()
+            from accelerate.utils import release_memory
+            release_memory()
         except ImportError:
-            pass
+            gc.collect()
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                    torch.cuda.ipc_collect()
+            except ImportError:
+                pass
