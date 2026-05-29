@@ -174,30 +174,32 @@ def _attn_impl_for_hardware(requested: Optional[str]) -> Optional[str]:
 
 
 def configure_sdp_backends() -> None:
-    """Prefer PyTorch's memory-efficient SDP kernel over the math kernel.
+    """Force PyTorch's SDP selector to prefer memory-efficient over math.
 
-    On Turing GPUs (T4) PyTorch defaults to the math kernel for SDPA, which
-    materializes the full N×N attention matrix — OOMs at 4K+ context on a
-    15GB T4. The mem-efficient kernel computes attention in tiled chunks
-    with O(N) peak memory. We keep math enabled as a last-resort fallback
-    for shapes the mem-efficient kernel can't handle.
+    Critical for T4 (sm_75): math kernel materializes the full N×N attention
+    matrix and OOMs at 4K+ context. Mem-efficient computes in O(N) memory
+    tiles. We DISABLE math by default so the selector can't pick it; if
+    flash/mem_efficient/cudnn can't handle the shape, you get a loud error
+    instead of a silent OOM at scale.
 
-    On Ampere+ this is a no-op in practice because FA2 takes precedence
-    anyway, but we still configure it for safety.
+    Override via env var (set ENABLE_MATH_SDP=1) if you specifically need
+    the math fallback enabled for shape-compatibility diagnosis.
     """
     try:
         import torch
-        # Order of preference: flash > mem_efficient > math
+        # Preference order on Turing: cudnn (if present) > mem_efficient
+        # On Ampere+: flash > mem_efficient
         torch.backends.cuda.enable_flash_sdp(True)
         torch.backends.cuda.enable_mem_efficient_sdp(True)
-        torch.backends.cuda.enable_math_sdp(True)
-        # If `enable_cudnn_sdp` is available (PyTorch >= 2.4), enable it too
-        # — it's another efficient backend on some hardware.
+        # Math: disabled by default. Math kernel = O(N^2) memory = OOM trap.
+        allow_math = os.environ.get("ENABLE_MATH_SDP", "0") == "1"
+        torch.backends.cuda.enable_math_sdp(allow_math)
         if hasattr(torch.backends.cuda, "enable_cudnn_sdp"):
             torch.backends.cuda.enable_cudnn_sdp(True)
         print(f"  SDP backends: flash={torch.backends.cuda.flash_sdp_enabled()}, "
               f"mem_efficient={torch.backends.cuda.mem_efficient_sdp_enabled()}, "
-              f"math={torch.backends.cuda.math_sdp_enabled()}")
+              f"math={torch.backends.cuda.math_sdp_enabled()}"
+              f"{' (math forced enabled via ENABLE_MATH_SDP)' if allow_math else ''}")
     except Exception as e:
         print(f"  configure_sdp_backends failed ({e}); using PyTorch defaults")
 

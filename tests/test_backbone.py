@@ -123,6 +123,40 @@ def test_configure_sdp_backends_runs_without_error():
     backbone.configure_sdp_backends()
 
 
+def test_configure_sdp_backends_disables_math_by_default(monkeypatch):
+    """By default math SDP should be disabled to prevent O(N^2) OOM."""
+    monkeypatch.delenv("ENABLE_MATH_SDP", raising=False)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    # Track the calls to enable_math_sdp
+    calls = []
+    monkeypatch.setattr(torch.backends.cuda, "enable_math_sdp", lambda v: calls.append(v))
+    monkeypatch.setattr(torch.backends.cuda, "enable_flash_sdp", lambda v: None)
+    monkeypatch.setattr(torch.backends.cuda, "enable_mem_efficient_sdp", lambda v: None)
+    # Stub the .{kernel}_sdp_enabled getters so the print doesn't barf
+    monkeypatch.setattr(torch.backends.cuda, "flash_sdp_enabled", lambda: True)
+    monkeypatch.setattr(torch.backends.cuda, "mem_efficient_sdp_enabled", lambda: True)
+    monkeypatch.setattr(torch.backends.cuda, "math_sdp_enabled", lambda: False)
+    backbone.configure_sdp_backends()
+    # math should have been disabled (last call was False)
+    assert False in calls
+    assert calls[-1] is False  # math was the last one set
+
+
+def test_configure_sdp_backends_can_re_enable_math_via_env(monkeypatch):
+    """ENABLE_MATH_SDP=1 should re-enable math SDP."""
+    monkeypatch.setenv("ENABLE_MATH_SDP", "1")
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    calls = []
+    monkeypatch.setattr(torch.backends.cuda, "enable_math_sdp", lambda v: calls.append(v))
+    monkeypatch.setattr(torch.backends.cuda, "enable_flash_sdp", lambda v: None)
+    monkeypatch.setattr(torch.backends.cuda, "enable_mem_efficient_sdp", lambda v: None)
+    monkeypatch.setattr(torch.backends.cuda, "flash_sdp_enabled", lambda: True)
+    monkeypatch.setattr(torch.backends.cuda, "mem_efficient_sdp_enabled", lambda: True)
+    monkeypatch.setattr(torch.backends.cuda, "math_sdp_enabled", lambda: True)
+    backbone.configure_sdp_backends()
+    assert True in calls
+
+
 @pytest.mark.gpu
 @pytest.mark.smoke
 def test_load_qwen3_4b_with_delta_mem():
