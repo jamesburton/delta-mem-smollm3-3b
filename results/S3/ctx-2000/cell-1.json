@@ -16,15 +16,15 @@
     "perplexity": null
   },
   "memory": {
-    "peak_vram_bytes": 9564865536,
+    "peak_vram_bytes": 9564996608,
     "kv_cache_bytes_at_target_len": 184320000
   },
   "speed": {
-    "prefill_seconds": 0.23453885300000366,
-    "ttft_seconds": 0.23503590600012103,
-    "decode_seconds": 5.431684319999931,
+    "prefill_seconds": 0.225685483999996,
+    "ttft_seconds": 0.22582224500001757,
+    "decode_seconds": 4.9578475289999915,
     "new_tokens": 64,
-    "decode_tokens_per_second": 11.598612196225865
+    "decode_tokens_per_second": 12.707127363536982
   },
   "config": {
     "cell": {
@@ -61,7 +61,7 @@
     }
   },
   "answer_preview": "\n\ngolf: GN47-71H\nlima: JX21-22D\nalpha: QG99-28V",
-  "timestamp": "2026-05-29T10:04:45.202669Z",
+  "timestamp": "2026-05-29T11:00:01.464246Z",
   "context_tokens": 2000,
-  "wall_clock_seconds": 68.36992438300001
+  "wall_clock_seconds": 34.07786431599993
 }
