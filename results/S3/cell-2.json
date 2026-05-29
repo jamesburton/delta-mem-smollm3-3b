@@ -20,11 +20,11 @@
     "kv_cache_bytes_at_target_len": 184320000
   },
   "speed": {
-    "prefill_seconds": 0.3608857240000134,
-    "ttft_seconds": 0.3610135369999625,
-    "decode_seconds": 6.674265417000015,
+    "prefill_seconds": 0.35941574200001014,
+    "ttft_seconds": 0.3595386530000724,
+    "decode_seconds": 6.55019616300001,
     "new_tokens": 64,
-    "decode_tokens_per_second": 9.43924103460626
+    "decode_tokens_per_second": 9.618032564561519
   },
   "config": {
     "cell": {
@@ -61,5 +61,5 @@
     }
   },
   "answer_preview": "golf: GN47-71H\nlima: JX21-22D\nalpha: QG99-28V",
-  "timestamp": "2026-05-29T10:57:46.679318Z"
+  "timestamp": "2026-05-29T12:08:28.911935Z"
 }
