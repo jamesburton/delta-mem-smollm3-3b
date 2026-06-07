@@ -26,11 +26,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 import traceback
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -45,6 +46,74 @@ DEFAULT_CONTEXTS = (2000, 4000, 8000, 16000)
 DEFAULT_CELL_IDS = ("1", "2", "6", "7")
 
 
+def _run_combo_inproc(cell, cfg, ctx: int) -> dict:
+    """Run one (cell, ctx) combo in-process. Returns the result dict."""
+    t0 = time.perf_counter()
+    try:
+        rec = hf_runner.run(cell, cfg)
+    except Exception as e:
+        traceback.print_exc()
+        rec = {
+            "cell_id": cell.id,
+            "title": cell.title,
+            "status": "failed",
+            "error": repr(e),
+        }
+    rec["context_tokens"] = ctx
+    rec["wall_clock_seconds"] = time.perf_counter() - t0
+    out_path = cfg.results_dir / f"cell-{cell.id}.json"
+    out_path.write_text(json.dumps(rec, indent=2))
+    return rec
+
+
+def _run_combo_subproc(
+    cell, ctx: int, ctx_dir: Path, *,
+    max_new_tokens: int, dtype: str, device: str, seed: int,
+) -> dict:
+    """Run one (cell, ctx) combo in a fresh python subprocess.
+
+    Isolates GPU/CUDA state: an OOM or CUBLAS wedge kills only the worker, and
+    the next combo starts with a clean CUDA context. The subprocess writes the
+    same per-cell JSON the in-process path would; we read it back to assemble
+    the summary. On non-zero exit, synthesise a `failed` record with stderr.
+    """
+    out_path = ctx_dir / f"cell-{cell.id}.json"
+    if out_path.exists():
+        out_path.unlink()  # don't read a stale record from a previous run
+    cmd = [
+        sys.executable, str(Path(__file__).resolve()),
+        "--_one_combo", f"{cell.id}:{ctx}",
+        "--results-root", str(ctx_dir.parent.parent),
+        "--stage", ctx_dir.parent.name,
+        "--max-new-tokens", str(max_new_tokens),
+        "--dtype", dtype,
+    ]
+    if device:
+        cmd += ["--device", device]
+    t0 = time.perf_counter()
+    env = os.environ.copy()
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    proc = subprocess.run(cmd, env=env)
+    wall = time.perf_counter() - t0
+    if out_path.exists():
+        rec = json.loads(out_path.read_text(encoding="utf-8"))
+        # Worker writes its own wall_clock; keep the outer measurement too
+        # for orchestrator-level timing including subprocess startup.
+        rec.setdefault("wall_clock_seconds", wall)
+        return rec
+    # Subprocess died before writing — synthesise a failed record
+    rec = {
+        "cell_id": cell.id,
+        "title": cell.title,
+        "status": "failed",
+        "error": f"subprocess exited {proc.returncode} without writing result",
+        "context_tokens": ctx,
+        "wall_clock_seconds": wall,
+    }
+    out_path.write_text(json.dumps(rec, indent=2), encoding="utf-8")
+    return rec
+
+
 def run_sweep(
     *,
     contexts=DEFAULT_CONTEXTS,
@@ -55,8 +124,13 @@ def run_sweep(
     results_root: Path = REPO_ROOT / "results",
     stage: str = "S3",
     seed: int = 0,
+    isolate: bool = True,
 ) -> List[dict]:
-    """Run the sweep. Returns list of result dicts (one per combo)."""
+    """Run the sweep. Returns list of result dicts (one per combo).
+
+    With isolate=True (default), each (cell, ctx) runs in a fresh subprocess so
+    a CUDA wedge or OOM in one combo can't poison the rest of the sweep.
+    """
     import torch
     if device is None:
         device = "auto" if torch.cuda.is_available() else "cpu"
@@ -70,31 +144,25 @@ def run_sweep(
                 print(f"⏸ unknown cell id: {cid}")
                 continue
             cell = by_id[cid]
-            cfg = RunConfig(
-                target_tokens=ctx,
-                n_needles=3,
-                max_new_tokens=max_new_tokens,
-                seed=seed,
-                dtype=dtype,
-                device=device,
-                results_dir=ctx_dir,
-            )
-            print(f"▶ ctx={ctx} cell={cell.id}: {cell.title}")
-            t0 = time.perf_counter()
-            try:
-                rec = hf_runner.run(cell, cfg)
-            except Exception as e:
-                traceback.print_exc()
-                rec = {
-                    "cell_id": cell.id,
-                    "title": cell.title,
-                    "status": "failed",
-                    "error": repr(e),
-                }
-            rec["context_tokens"] = ctx
-            rec["wall_clock_seconds"] = time.perf_counter() - t0
-            out_path = ctx_dir / f"cell-{cell.id}.json"
-            out_path.write_text(json.dumps(rec, indent=2))
+            print(f"▶ ctx={ctx} cell={cell.id}: {cell.title}"
+                  f"{'  (subprocess)' if isolate else ''}")
+            if isolate:
+                rec = _run_combo_subproc(
+                    cell, ctx, ctx_dir,
+                    max_new_tokens=max_new_tokens, dtype=dtype,
+                    device=device, seed=seed,
+                )
+            else:
+                cfg = RunConfig(
+                    target_tokens=ctx,
+                    n_needles=3,
+                    max_new_tokens=max_new_tokens,
+                    seed=seed,
+                    dtype=dtype,
+                    device=device,
+                    results_dir=ctx_dir,
+                )
+                rec = _run_combo_inproc(cell, cfg, ctx)
             status = rec.get("status", "?")
             q = rec.get("quality", {}).get("multineedle", {})
             frac = q.get("fraction")
@@ -165,6 +233,39 @@ def _fmt_bytes(n):
     return f"{val:.1f} TB"
 
 
+def _worker_one_combo(spec: str, *,
+                      results_root: Path, stage: str,
+                      max_new_tokens: int, dtype: str,
+                      device: Optional[str]) -> int:
+    """Worker mode: run exactly one (cell, ctx) combo and exit.
+
+    Used by `_run_combo_subproc` to isolate GPU state per combo. Writes the
+    per-cell JSON to `{results_root}/{stage}/ctx-{ctx}/cell-{cell_id}.json`.
+    """
+    cell_id, ctx_str = spec.split(":", 1)
+    ctx = int(ctx_str)
+    by_id = {c.id: c for c in cell_registry.CELLS}
+    if cell_id not in by_id:
+        print(f"  unknown cell id: {cell_id}", file=sys.stderr)
+        return 2
+    cell = by_id[cell_id]
+    ctx_dir = results_root / stage / f"ctx-{ctx}"
+    ctx_dir.mkdir(parents=True, exist_ok=True)
+    import torch
+    eff_device = device or ("auto" if torch.cuda.is_available() else "cpu")
+    cfg = RunConfig(
+        target_tokens=ctx,
+        n_needles=3,
+        max_new_tokens=max_new_tokens,
+        seed=0,
+        dtype=dtype,
+        device=eff_device,
+        results_dir=ctx_dir,
+    )
+    rec = _run_combo_inproc(cell, cfg, ctx)
+    return 0 if rec.get("status") == "ok" else 1
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--contexts", default=",".join(str(c) for c in DEFAULT_CONTEXTS),
@@ -176,7 +277,21 @@ def main() -> int:
     p.add_argument("--device", default=os.environ.get("DEVICE"))
     p.add_argument("--results-root", type=Path, default=REPO_ROOT / "results")
     p.add_argument("--stage", default=os.environ.get("STAGE", "S3"))
+    p.add_argument("--no-isolate", action="store_true",
+                   help="Run all combos in-process (faster startup, but one "
+                        "OOM/CUDA wedge poisons the rest of the sweep).")
+    p.add_argument("--_one_combo", default=None,
+                   help=argparse.SUPPRESS)  # internal worker mode
     args = p.parse_args()
+
+    if args._one_combo:
+        return _worker_one_combo(
+            args._one_combo,
+            results_root=args.results_root, stage=args.stage,
+            max_new_tokens=args.max_new_tokens, dtype=args.dtype,
+            device=args.device,
+        )
+
     contexts = [int(c.strip()) for c in args.contexts.split(",") if c.strip()]
     cell_ids = [c.strip() for c in args.cells.split(",") if c.strip()]
     results = run_sweep(
@@ -187,6 +302,7 @@ def main() -> int:
         device=args.device,
         results_root=args.results_root,
         stage=args.stage,
+        isolate=not args.no_isolate,
     )
     md = render_sweep_summary(results)
     sweep_path = args.results_root / args.stage / "context_sweep.md"
