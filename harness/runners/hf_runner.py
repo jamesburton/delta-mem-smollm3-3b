@@ -60,6 +60,53 @@ def _default_assistant_for(base_model: str) -> Optional[str]:
     return None
 
 
+def _window_size_for_lever(kv_lever: str) -> Optional[int]:
+    """Return the sliding-window length for this lever, or None if no window.
+
+    Conventions taken from the v3 test matrix:
+      - "window" / "window+side-state"   → 4K context window
+      - "aggressive-window+side-state"   → 2K context window
+      - "sink+window+side-state"         → 4K + StreamingLLM sink tokens
+    """
+    if "aggressive-window" in kv_lever:
+        return 2048
+    if "window" in kv_lever:
+        return 4096
+    return None
+
+
+def _apply_kv_lever(model, kv_lever: str) -> None:
+    """Mutate the loaded model's config so the kv_lever is actually in effect.
+
+    Qwen3 exposes `use_sliding_window` and `sliding_window` config flags; when
+    enabled, transformers' Qwen3 attention applies a sliding-window causal
+    mask and the cache it picks for generation tracks only that window.
+
+    This is the place where cells 3/4/5/8/10/12 stop being scaffolds and
+    actually exercise the SW lever. The δ-Mem side of "window+side-state" is
+    already handled separately (see _resolve_cell_config).
+    """
+    if model is None:
+        return
+    W = _window_size_for_lever(kv_lever)
+    if W is None:
+        return
+    cfg = getattr(model, "config", None)
+    if cfg is None:
+        return
+    if not (hasattr(cfg, "sliding_window") and hasattr(cfg, "use_sliding_window")):
+        print(f"  ⚠️ model config does not expose sliding_window; SW lever ignored")
+        return
+    cfg.use_sliding_window = True
+    cfg.sliding_window = W
+    # Qwen3 has a `max_window_layers` knob that gates which layers use SW;
+    # set it to all layers so every layer participates.
+    if hasattr(cfg, "max_window_layers") and hasattr(cfg, "num_hidden_layers"):
+        cfg.max_window_layers = cfg.num_hidden_layers
+    print(f"  SW lever active: sliding_window={W}, max_window_layers="
+          f"{getattr(cfg, 'max_window_layers', '?')}")
+
+
 def _utc_now_iso() -> str:
     """Timezone-aware UTC ISO 8601 with 'Z' suffix."""
     return datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z")
@@ -95,6 +142,7 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
     session = None
     try:
         model, tok, session = load_backbone(bcfg)
+        _apply_kv_lever(model, cell.kv_lever)
         asst = load_assistant(rc.assistant_model_id, device=rc.device, dtype=rc.dtype) \
             if rc.assistant_model_id and session is None else None
         # Note: if session is set, we don't currently support spec-decode + δ-Mem in
