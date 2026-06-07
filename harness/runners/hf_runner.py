@@ -83,6 +83,78 @@ def _window_size_for_lever(kv_lever: str) -> Optional[int]:
 # run with δ-Mem only — the SW side is logged but not effective.
 
 
+def _generate_with_memory_split(model, tok, prompt: str, *,
+                                max_new_tokens: int,
+                                seed: int = 0,
+                                assistant=None):
+    """Run a single `generate()` but capture prefill and decode peaks separately.
+
+    Returns (answer_text, prefill_peak_bytes, decode_peak_bytes).
+
+    Why this approach: `torch.cuda.max_memory_allocated()` is process-lifetime
+    peak, and FA2's prefill workspace at long context dominates. The KV-cache
+    differences between vanilla / SW / δ-Mem that the v3 hypothesis cares
+    about live in the DECODE phase. To isolate the decode peak without
+    losing PyTorch's allocator-fusion of prefill+decode workspace (a manual
+    prefill/decode split inflates prefill peak by ~1.7 GiB because the
+    allocator can't reuse the workspace block), we attach a forward_pre_hook
+    on the top-level model:
+
+      - Hook fires before forward call #0 (= prefill)
+      - Hook fires before forward call #1 (= first decode step):
+        prefill is done. Snapshot peak. Reset stats. Continue.
+      - After generate() returns, peak since reset = decode peak.
+
+    `generate()` itself runs as one call so the allocator gets to optimise.
+    For spec-decode (assistant != None) the assistant fires extra forwards
+    interleaved; we still treat call #0 as prefill and everything after as
+    decode for the target model. Hook is attached on the TARGET only.
+    """
+    import torch
+    device = next(model.parameters()).device
+    inputs = tok(prompt, return_tensors="pt").to(device)
+    if seed is not None:
+        torch.manual_seed(seed)
+
+    call_idx = [0]
+    prefill_peak_box: Dict[str, int] = {"v": 0}
+
+    def _pre_hook(module, args, kwargs):
+        if call_idx[0] == 1:
+            # First decode step is about to begin. Snapshot prefill peak,
+            # then reset so subsequent measurements isolate the decode phase.
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            prefill_peak_box["v"] = memory.measure_peak_vram()
+            memory.reset_peak_vram()
+        call_idx[0] += 1
+
+    handle = model.register_forward_pre_hook(_pre_hook, with_kwargs=True)
+    try:
+        memory.reset_peak_vram()
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        gen_kwargs = dict(
+            max_new_tokens=max_new_tokens,
+            do_sample=False, use_cache=True,
+        )
+        if assistant is not None:
+            gen_kwargs["assistant_model"] = assistant
+        with torch.no_grad():
+            out = model.generate(**inputs, **gen_kwargs)
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+    finally:
+        handle.remove()
+
+    decode_peak = memory.measure_peak_vram()
+    # If max_new_tokens == 1 the hook never fired for "decode": prefill peak
+    # wasn't captured. Treat the whole run as prefill.
+    prefill_peak = prefill_peak_box["v"] or decode_peak
+    answer = tok.decode(out[0, inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+    return answer, prefill_peak, decode_peak
+
+
 def _utc_now_iso() -> str:
     """Timezone-aware UTC ISO 8601 with 'Z' suffix."""
     return datetime.datetime.now(datetime.UTC).isoformat().replace("+00:00", "Z")
@@ -133,29 +205,30 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
             seed=rc.seed,
         )
 
+        nih_prompt = task.context + "\n\n" + task.question
+        prefill_peak: Optional[int] = None
+        decode_peak: Optional[int] = None
         if session is not None:
-            # δ-Mem path: feed the entire NIH prompt as a single user message.
-            # The session's generate_reply tokenizes via chat template, runs the
-            # write phase (context flows into the online memory state), then
-            # decodes the answer with write disabled.
+            # δ-Mem path: the upstream session runs write+decode opaquely, so
+            # we can only measure overall peak. Reset before the call so we
+            # exclude the model-load peak; the result lands as decode_peak
+            # (and the harness reports prefill_peak as None).
+            memory.reset_peak_vram()
             reply = session.generate_reply(
-                user_text=task.context + "\n\n" + task.question,
+                user_text=nih_prompt,
                 max_new_tokens=rc.max_new_tokens,
             )
             answer = reply["assistant"]
-        elif asst is not None:
-            answer = generate_with_spec_decode(
-                model, tok, asst,
-                prompt=task.context + "\n\n" + task.question,
-                max_new_tokens=rc.max_new_tokens,
-            )
+            decode_peak = memory.measure_peak_vram()
         else:
-            import torch
-            prompt = task.context + "\n\n" + task.question
-            inputs = tok(prompt, return_tensors="pt").to(next(model.parameters()).device)
-            with torch.no_grad():
-                out = model.generate(**inputs, max_new_tokens=rc.max_new_tokens, do_sample=False)
-            answer = tok.decode(out[0, inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+            # Plain + spec-decode path: prefill and decode run as separate
+            # calls so memory peaks split cleanly. See helper docstring.
+            answer, prefill_peak, decode_peak = _generate_with_memory_split(
+                model, tok, nih_prompt,
+                max_new_tokens=rc.max_new_tokens,
+                seed=rc.seed,
+                assistant=asst,
+            )
 
         nih_score = quality.score_multineedle(task, answer)
 
@@ -192,8 +265,14 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
                 "perplexity": ppl,
             },
             "memory": {
-                "peak_vram_bytes": memory.measure_peak_vram(),
+                # Legacy field, kept so old result JSONs stay comparable.
+                # Now derived from the explicit phase peaks below — the
+                # post-helper torch.cuda.max_memory_allocated() only sees
+                # the most recently reset window, not the historical peak.
+                "peak_vram_bytes": max(prefill_peak or 0, decode_peak or 0),
                 "kv_cache_bytes_at_target_len": int(kv_bytes_at_ctx),
+                "prefill_peak_vram_bytes": prefill_peak,
+                "decode_peak_vram_bytes": decode_peak,
             },
             "speed": speed_record.as_dict(),
             "config": {
