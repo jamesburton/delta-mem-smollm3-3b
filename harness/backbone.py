@@ -42,6 +42,13 @@ class BackboneConfig:
     delta_mem_adapter_id: Optional[str] = None
     trust_remote_code: bool = True
     attn_implementation: Optional[str] = "flash_attention_2"  # falls back via try/except if unavailable
+    # Sliding-window kv_lever. When set, the loader rewrites the model
+    # config's `layer_types` to ["sliding_attention"] * num_hidden_layers
+    # BEFORE `from_pretrained` so the attention modules initialise with
+    # SW awareness and the generation cache picks DynamicSlidingWindowLayer
+    # automatically. Post-load mutation does not work — Qwen3's attention
+    # mask code raises KeyError mid-decode.
+    sliding_window: Optional[int] = None
 
     def as_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -248,7 +255,7 @@ def load_backbone(cfg: BackboneConfig) -> Tuple[Any, Any, Optional[Any]]:
 
 
 def _load_plain(cfg: BackboneConfig) -> Tuple[Any, Any, None]:
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
     tok = AutoTokenizer.from_pretrained(cfg.model_id, trust_remote_code=cfg.trust_remote_code)
     if tok.pad_token is None:
@@ -260,6 +267,25 @@ def _load_plain(cfg: BackboneConfig) -> Tuple[Any, Any, None]:
         trust_remote_code=cfg.trust_remote_code,
         **device_kwargs,
     )
+    # If a sliding-window lever is requested, edit the config BEFORE load so
+    # the attention modules pick up SW awareness at init time. See the
+    # BackboneConfig.sliding_window docstring for why this is load-time, not
+    # post-load.
+    if cfg.sliding_window:
+        model_config = AutoConfig.from_pretrained(cfg.model_id, trust_remote_code=cfg.trust_remote_code)
+        if not hasattr(model_config, "sliding_window"):
+            print(f"  ⚠️ {cfg.model_id} config has no sliding_window attribute; SW lever ignored")
+        else:
+            model_config.use_sliding_window = True
+            model_config.sliding_window = cfg.sliding_window
+            if hasattr(model_config, "max_window_layers") and hasattr(model_config, "num_hidden_layers"):
+                model_config.max_window_layers = model_config.num_hidden_layers
+            if hasattr(model_config, "layer_types") and hasattr(model_config, "num_hidden_layers"):
+                model_config.layer_types = ["sliding_attention"] * model_config.num_hidden_layers
+            common["config"] = model_config
+            print(f"  SW lever baked into config: sliding_window={cfg.sliding_window}, "
+                  f"layer_types[0]=sliding_attention")
+
     effective_impl = _attn_impl_for_hardware(cfg.attn_implementation)
     model = None
     if effective_impl:

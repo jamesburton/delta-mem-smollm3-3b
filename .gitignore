@@ -254,3 +254,4 @@ tmp/
 # the README + manifest; the actual .whl files are fetched on demand
 # by scripts/install_local_windows.py.
 wheels/local/**/*.whl
+.deps/

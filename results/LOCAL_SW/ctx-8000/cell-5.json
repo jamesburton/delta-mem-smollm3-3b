@@ -1,0 +1,8 @@
+{
+  "cell_id": "5",
+  "title": "Qwen3-4B + SW-2K + \u03b4-Mem",
+  "status": "failed",
+  "error": "KeyError('sliding_attention')",
+  "context_tokens": 8000,
+  "wall_clock_seconds": 43.29938199999742
+}

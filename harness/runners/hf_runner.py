@@ -75,36 +75,12 @@ def _window_size_for_lever(kv_lever: str) -> Optional[int]:
     return None
 
 
-def _apply_kv_lever(model, kv_lever: str) -> None:
-    """Mutate the loaded model's config so the kv_lever is actually in effect.
-
-    Qwen3 exposes `use_sliding_window` and `sliding_window` config flags; when
-    enabled, transformers' Qwen3 attention applies a sliding-window causal
-    mask and the cache it picks for generation tracks only that window.
-
-    This is the place where cells 3/4/5/8/10/12 stop being scaffolds and
-    actually exercise the SW lever. The δ-Mem side of "window+side-state" is
-    already handled separately (see _resolve_cell_config).
-    """
-    if model is None:
-        return
-    W = _window_size_for_lever(kv_lever)
-    if W is None:
-        return
-    cfg = getattr(model, "config", None)
-    if cfg is None:
-        return
-    if not (hasattr(cfg, "sliding_window") and hasattr(cfg, "use_sliding_window")):
-        print(f"  ⚠️ model config does not expose sliding_window; SW lever ignored")
-        return
-    cfg.use_sliding_window = True
-    cfg.sliding_window = W
-    # Qwen3 has a `max_window_layers` knob that gates which layers use SW;
-    # set it to all layers so every layer participates.
-    if hasattr(cfg, "max_window_layers") and hasattr(cfg, "num_hidden_layers"):
-        cfg.max_window_layers = cfg.num_hidden_layers
-    print(f"  SW lever active: sliding_window={W}, max_window_layers="
-          f"{getattr(cfg, 'max_window_layers', '?')}")
+# NOTE: the SW lever is wired at load time inside `backbone._load_plain`
+# (see BackboneConfig.sliding_window). We can't mutate config post-load
+# because Qwen3's attention modules cache their mask config at __init__
+# and won't pick up a runtime flip. The δ-Mem path bypasses backbone's
+# loader entirely, so cells 4 (SW-4K+δ-Mem) and 5 (SW-2K+δ-Mem) currently
+# run with δ-Mem only — the SW side is logged but not effective.
 
 
 def _utc_now_iso() -> str:
@@ -125,6 +101,7 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
         model_id=cell.base_model,
         dtype=rc.dtype, device=rc.device,
         delta_mem_adapter_id=rc.delta_mem_adapter_id,
+        sliding_window=_window_size_for_lever(cell.kv_lever),
     )
     memory.reset_peak_vram()
     # Pre-load diagnostic: confirm GPUs are actually empty before we start
@@ -142,7 +119,6 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
     session = None
     try:
         model, tok, session = load_backbone(bcfg)
-        _apply_kv_lever(model, cell.kv_lever)
         asst = load_assistant(rc.assistant_model_id, device=rc.device, dtype=rc.dtype) \
             if rc.assistant_model_id and session is None else None
         # Note: if session is set, we don't currently support spec-decode + δ-Mem in
