@@ -167,6 +167,12 @@ def _attn_impl_for_hardware(requested: Optional[str]) -> Optional[str]:
                 print(f"  GPU {i} compute capability is sm_{cap[0]}{cap[1]} — "
                       f"FlashAttention-2 needs sm_80+; using SDPA mem-efficient")
                 return "sdpa"
+        # GPU supports FA2 — but the package also has to be importable
+        try:
+            import flash_attn  # noqa: F401
+        except ImportError:
+            print(f"  flash_attn package not installed; using SDPA mem-efficient")
+            return "sdpa"
         return "flash_attention_2"
     except Exception as e:
         print(f"  capability check failed ({e}); falling back to SDPA")
