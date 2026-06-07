@@ -118,6 +118,7 @@ def _generate_with_memory_split(model, tok, prompt: str, *,
 
     call_idx = [0]
     prefill_peak_box: Dict[str, int] = {"v": 0}
+    decode_resident_box: Dict[str, int] = {"v": 0}
 
     def _pre_hook(module, args, kwargs):
         if call_idx[0] == 1:
@@ -127,6 +128,18 @@ def _generate_with_memory_split(model, tok, prompt: str, *,
                 torch.cuda.synchronize()
             prefill_peak_box["v"] = memory.measure_peak_vram()
             memory.reset_peak_vram()
+        elif call_idx[0] >= 2:
+            # After at least one decode forward has completed. Capture
+            # steady-state resident — this is where SW / sink caches
+            # actually show their cropping. Keep the running max across
+            # decode steps so the metric reflects the largest steady-state
+            # cache the generation saw (matters when generation extends
+            # beyond the window — SW stays at window, vanilla grows).
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+            r = memory.measure_resident_vram()
+            if r > decode_resident_box["v"]:
+                decode_resident_box["v"] = r
         call_idx[0] += 1
 
     handle = model.register_forward_pre_hook(_pre_hook, with_kwargs=True)
@@ -151,8 +164,14 @@ def _generate_with_memory_split(model, tok, prompt: str, *,
     # If max_new_tokens == 1 the hook never fired for "decode": prefill peak
     # wasn't captured. Treat the whole run as prefill.
     prefill_peak = prefill_peak_box["v"] or decode_peak
+    # Decode-phase steady-state resident: max alloc seen at the start of
+    # any decode-step forward (call_idx >= 2). This is AFTER the SW layer's
+    # update() has cropped the cache, so it exposes real cache savings —
+    # unlike either (a) post-generate resident (cache already freed) or
+    # (b) prefill-boundary resident (cache not yet cropped).
+    decode_resident = decode_resident_box["v"] or 0
     answer = tok.decode(out[0, inputs["input_ids"].shape[1]:], skip_special_tokens=True)
-    return answer, prefill_peak, decode_peak
+    return answer, prefill_peak, decode_peak, decode_resident
 
 
 def _utc_now_iso() -> str:
@@ -208,11 +227,11 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
         nih_prompt = task.context + "\n\n" + task.question
         prefill_peak: Optional[int] = None
         decode_peak: Optional[int] = None
+        decode_resident: Optional[int] = None
         if session is not None:
             # δ-Mem path: the upstream session runs write+decode opaquely, so
             # we can only measure overall peak. Reset before the call so we
-            # exclude the model-load peak; the result lands as decode_peak
-            # (and the harness reports prefill_peak as None).
+            # exclude the model-load peak; the result lands as decode_peak.
             memory.reset_peak_vram()
             reply = session.generate_reply(
                 user_text=nih_prompt,
@@ -223,12 +242,13 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
         else:
             # Plain + spec-decode path: prefill and decode run as separate
             # calls so memory peaks split cleanly. See helper docstring.
-            answer, prefill_peak, decode_peak = _generate_with_memory_split(
-                model, tok, nih_prompt,
-                max_new_tokens=rc.max_new_tokens,
-                seed=rc.seed,
-                assistant=asst,
-            )
+            answer, prefill_peak, decode_peak, decode_resident = \
+                _generate_with_memory_split(
+                    model, tok, nih_prompt,
+                    max_new_tokens=rc.max_new_tokens,
+                    seed=rc.seed,
+                    assistant=asst,
+                )
 
         nih_score = quality.score_multineedle(task, answer)
 
@@ -273,6 +293,12 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
                 "kv_cache_bytes_at_target_len": int(kv_bytes_at_ctx),
                 "prefill_peak_vram_bytes": prefill_peak,
                 "decode_peak_vram_bytes": decode_peak,
+                # Steady-state alloc captured AFTER the first decode forward
+                # has completed (call_idx >= 2 in the helper's hook). By that
+                # point the SW layer's update() has cropped the cache, so
+                # the metric reflects what's actually resident during decode
+                # — exposes real SW / sink / cache savings.
+                "decode_resident_vram_bytes": decode_resident,
             },
             "speed": speed_record.as_dict(),
             "config": {

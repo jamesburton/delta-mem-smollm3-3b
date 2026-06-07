@@ -54,6 +54,28 @@ def measure_peak_vram() -> int:
         return 0
 
 
+def measure_resident_vram() -> int:
+    """Snapshot current allocation (steady-state), not peak.
+
+    Where `measure_peak_vram` captures the worst-case allocator high-water
+    mark — which includes transient spikes during operations like KV cache
+    slicing — `measure_resident_vram` reports what's currently in use.
+    Calling this at end of decode shows the post-generation resident set:
+    model weights + final KV cache + any other tensors still alive.
+
+    This is the metric to compare for cache-reduction tests like SW or
+    sink cache — the transient peak that contains both pre-slice and
+    post-slice tensors will mask the steady-state reduction.
+    """
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            return 0
+        return int(torch.cuda.memory_allocated())
+    except ImportError:
+        return 0
+
+
 def reset_peak_vram() -> None:
     try:
         import torch
