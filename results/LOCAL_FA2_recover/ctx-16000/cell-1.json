@@ -1,0 +1,8 @@
+{
+  "cell_id": "1",
+  "title": "Qwen3-4B vanilla full attention",
+  "status": "failed",
+  "error": "AcceleratorError(\"CUDA error: unknown error\\nSearch for `cudaErrorUnknown' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.\\nCUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.\\nFor debugging consider passing CUDA_LAUNCH_BLOCKING=1\\nCompile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.\\n\")",
+  "context_tokens": 16000,
+  "wall_clock_seconds": 1271.766252500005
+}

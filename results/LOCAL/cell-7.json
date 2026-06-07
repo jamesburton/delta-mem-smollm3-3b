@@ -1,0 +1,6 @@
+{
+  "cell_id": "7",
+  "title": "Qwen3-4B + \u03b4-Mem + spec-decode",
+  "status": "failed",
+  "error": "ImportError(\"FlashAttention2 has been toggled on, but it cannot be used due to the following error: the package for FlashAttention2 doesn't seem to be installed.\")"
+}

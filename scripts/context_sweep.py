@@ -189,11 +189,16 @@ def main() -> int:
         stage=args.stage,
     )
     md = render_sweep_summary(results)
-    print()
-    print(md)
     sweep_path = args.results_root / args.stage / "context_sweep.md"
-    sweep_path.write_text(md)
+    sweep_path.write_text(md, encoding="utf-8")
     print(f"\nSaved {sweep_path}")
+    try:
+        print()
+        print(md)
+    except UnicodeEncodeError:
+        # Windows console can't always render Unicode (δ etc.); the file
+        # write above already succeeded.
+        print("(skipped stdout render: console encoding can't handle Unicode chars)")
     return 0
 
 

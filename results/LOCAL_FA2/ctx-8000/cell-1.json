@@ -1,0 +1,67 @@
+{
+  "cell_id": "1",
+  "title": "Qwen3-4B vanilla full attention",
+  "status": "ok",
+  "quality": {
+    "multineedle": {
+      "per_needle": [
+        true,
+        true,
+        true
+      ],
+      "recall_all": true,
+      "recall_any": true,
+      "fraction": 1.0
+    },
+    "perplexity": null
+  },
+  "memory": {
+    "peak_vram_bytes": 11704829952,
+    "kv_cache_bytes_at_target_len": 737280000
+  },
+  "speed": {
+    "prefill_seconds": 0.25207699998281896,
+    "ttft_seconds": 0.2522974999155849,
+    "decode_seconds": 16.8474887998309,
+    "new_tokens": 64,
+    "decode_tokens_per_second": 3.7394297006822965
+  },
+  "config": {
+    "cell": {
+      "id": "1",
+      "title": "Qwen3-4B vanilla full attention",
+      "base_model": "Qwen/Qwen3-4B-Instruct-2507",
+      "stack": "hf",
+      "stages": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "kv_lever": "none",
+      "speed_lever": "none",
+      "blocked_by": null,
+      "notes": ""
+    },
+    "run": {
+      "target_tokens": 8000,
+      "n_needles": 3,
+      "max_new_tokens": 64,
+      "dtype": "bfloat16",
+      "device": "auto",
+      "delta_mem_adapter_id": null,
+      "assistant_model_id": null
+    },
+    "backbone": {
+      "model_id": "Qwen/Qwen3-4B-Instruct-2507",
+      "dtype": "bfloat16",
+      "device": "auto",
+      "delta_mem_adapter_id": null,
+      "trust_remote_code": true,
+      "attn_implementation": "flash_attention_2"
+    }
+  },
+  "answer_preview": "\n\ngolf: GN47-71H\nlima: JX21-22D\nalpha: QG99-28V",
+  "timestamp": "2026-06-07T04:04:51.329430Z",
+  "context_tokens": 8000,
+  "wall_clock_seconds": 60.14653730019927
+}

@@ -248,3 +248,9 @@ tmp/
 !wheels/
 !wheels/**
 !wheels/**/.gitkeep
+
+# Local Windows wheels are too big to commit (torch ~2.7 GB,
+# flash_attn ~121 MB > GitHub's 100 MB per-file cap). We track only
+# the README + manifest; the actual .whl files are fetched on demand
+# by scripts/install_local_windows.py.
+wheels/local/**/*.whl
