@@ -255,3 +255,4 @@ tmp/
 # by scripts/install_local_windows.py.
 wheels/local/**/*.whl
 .deps/
+.cache/

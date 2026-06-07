@@ -138,6 +138,86 @@ def _resolve_device_args(device: str) -> Dict[str, Any]:
     return {"device_map": device}
 
 
+def _prepare_patched_snapshot(model_local: str, model_id: str, sliding_window: int) -> str:
+    """Materialise a patched copy of a HF snapshot with SW flags in config.json.
+
+    Upstream's `load_delta_mem_chat_model` takes a local path (and uses
+    `local_files_only=True`), so the cheapest way to bake an SW config in
+    is to put a sibling directory next to the snapshot with:
+
+      - `config.json` rewritten to carry use_sliding_window, sliding_window,
+        max_window_layers, and layer_types=["sliding_attention", ...]
+      - every other file hardlinked from the original (no GB-scale copies)
+
+    The patched dir lives at:
+      <repo>/.cache/patched_snapshots/<model-id-safe>__sw<W>/
+
+    Idempotent: if the dir already exists with the right config.json the
+    function just returns its path.
+    """
+    import json, shutil
+    safe = model_id.replace("/", "__").replace(":", "_")
+    repo_root = Path(__file__).resolve().parents[1]
+    patched = repo_root / ".cache" / "patched_snapshots" / f"{safe}__sw{sliding_window}"
+    config_path = patched / "config.json"
+
+    src_root = Path(model_local)
+    src_config_path = src_root / "config.json"
+    if not src_config_path.exists():
+        print(f"  ⚠️ {src_config_path} missing; cannot patch SW; using unpatched snapshot")
+        return model_local
+
+    if config_path.exists():
+        # Already prepared. Trust the cached dir.
+        try:
+            existing = json.loads(config_path.read_text(encoding="utf-8"))
+            if existing.get("sliding_window") == sliding_window and \
+               existing.get("use_sliding_window") is True:
+                print(f"  reusing patched snapshot: {patched}")
+                return str(patched)
+        except (json.JSONDecodeError, OSError):
+            pass  # fall through and rebuild
+
+    patched.mkdir(parents=True, exist_ok=True)
+
+    # Materialise every non-config file from the source snapshot. The HF
+    # cache stores everything as symlinks to `../../blobs/<hash>`; copying
+    # those symlinks naively breaks the relative path. We resolve each
+    # entry to its actual file via os.path.realpath, then prefer hardlink
+    # (zero disk cost on NTFS), falling back to absolute symlink, falling
+    # back to copy.
+    for src in src_root.iterdir():
+        if src.name == "config.json":
+            continue
+        dst = patched / src.name
+        if dst.exists():
+            continue
+        # Resolve symlinks to the actual blob the HF cache stores.
+        resolved = Path(os.path.realpath(src))
+        if resolved.is_file():
+            try:
+                os.link(resolved, dst)
+            except OSError:
+                try:
+                    os.symlink(resolved, dst)
+                except OSError:
+                    shutil.copy2(resolved, dst)
+        elif resolved.is_dir():
+            shutil.copytree(resolved, dst)
+
+    # Patch config.json
+    cfg_json = json.loads(src_config_path.read_text(encoding="utf-8"))
+    nhl = cfg_json.get("num_hidden_layers")
+    cfg_json["use_sliding_window"] = True
+    cfg_json["sliding_window"] = sliding_window
+    if nhl:
+        cfg_json["max_window_layers"] = nhl
+        cfg_json["layer_types"] = ["sliding_attention"] * nhl
+    config_path.write_text(json.dumps(cfg_json, indent=2), encoding="utf-8")
+    print(f"  patched snapshot built: {patched}  (sliding_window={sliding_window})")
+    return str(patched)
+
+
 def _resolve_adapter_dir(adapter_id_or_path: str) -> str:
     """Return a local directory containing the adapter.
 
@@ -322,6 +402,13 @@ def _load_with_delta_mem(cfg: BackboneConfig) -> Tuple[Any, Any, Any]:
     from huggingface_hub import snapshot_download
     print(f"  resolving base model {cfg.model_id} to local cache...")
     model_local = snapshot_download(repo_id=cfg.model_id)
+
+    # SW lever for the δ-Mem path: upstream's loader doesn't accept a
+    # `config=` kwarg, so we materialise a patched snapshot beside the
+    # cached one with `config.json` rewritten to carry the SW flags, and
+    # point upstream at that. See _prepare_patched_snapshot.
+    if cfg.sliding_window:
+        model_local = _prepare_patched_snapshot(model_local, cfg.model_id, cfg.sliding_window)
 
     model, tok = load_delta_mem_chat_model(
         model_path=model_local,
