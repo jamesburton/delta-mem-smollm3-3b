@@ -267,32 +267,42 @@ def _attn_impl_for_hardware(requested: Optional[str]) -> Optional[str]:
 
 
 def configure_sdp_backends() -> None:
-    """Force PyTorch's SDP selector to prefer memory-efficient over math.
+    """Configure PyTorch's SDP backend preferences.
 
-    Critical for T4 (sm_75): math kernel materializes the full N×N attention
-    matrix and OOMs at 4K+ context. Mem-efficient computes in O(N) memory
-    tiles. We DISABLE math by default so the selector can't pick it; if
-    flash/mem_efficient/cudnn can't handle the shape, you get a loud error
-    instead of a silent OOM at scale.
+    The trade-off:
+      - `math` kernel materialises the full N×N attention matrix → O(N²)
+        memory. On a 12 GiB card at ≥4K context this OOMs.
+      - `mem_efficient` is O(N) memory but doesn't accept every shape /
+        dtype combination — some calls fall through to math.
+      - On Turing (T4), `flash` is enabled but not actually supported, so
+        the selector silently skips it.
+      - When NONE of the backends can serve the call, PyTorch raises
+        `RuntimeError: Invalid backend` and the run dies.
 
-    Override via env var (set ENABLE_MATH_SDP=1) if you specifically need
-    the math fallback enabled for shape-compatibility diagnosis.
+    Policy: keep math enabled by default so the universal fallback always
+    exists. Set `ENABLE_MATH_SDP=0` explicitly on memory-constrained cards
+    where you'd rather see a loud OOM than silently fall back to O(N²).
+
+    (Previous policy was opposite — math disabled by default — but the
+    Kaggle T4×2 run hit `Invalid backend` on every cell because Turing
+    can't run flash, mem_efficient couldn't accept some shapes, and math
+    had been explicitly forbidden. Empirically that failure mode is much
+    worse than a clean OOM.)
     """
     try:
         import torch
-        # Preference order on Turing: cudnn (if present) > mem_efficient
-        # On Ampere+: flash > mem_efficient
         torch.backends.cuda.enable_flash_sdp(True)
         torch.backends.cuda.enable_mem_efficient_sdp(True)
-        # Math: disabled by default. Math kernel = O(N^2) memory = OOM trap.
-        allow_math = os.environ.get("ENABLE_MATH_SDP", "0") == "1"
+        # Math: enabled by default for safety. Override with ENABLE_MATH_SDP=0
+        # on cards where O(N²) attention memory would push you over the edge.
+        allow_math = os.environ.get("ENABLE_MATH_SDP", "1") != "0"
         torch.backends.cuda.enable_math_sdp(allow_math)
         if hasattr(torch.backends.cuda, "enable_cudnn_sdp"):
             torch.backends.cuda.enable_cudnn_sdp(True)
         print(f"  SDP backends: flash={torch.backends.cuda.flash_sdp_enabled()}, "
               f"mem_efficient={torch.backends.cuda.mem_efficient_sdp_enabled()}, "
               f"math={torch.backends.cuda.math_sdp_enabled()}"
-              f"{' (math forced enabled via ENABLE_MATH_SDP)' if allow_math else ''}")
+              f"{' (math disabled via ENABLE_MATH_SDP=0)' if not allow_math else ''}")
     except Exception as e:
         print(f"  configure_sdp_backends failed ({e}); using PyTorch defaults")
 
