@@ -3,7 +3,12 @@
 # need the most recent transformers / accelerate.
 
 # Core HF stack
-transformers>=4.55.0
+# transformers >=5.5 is required for the SDPA mem_efficient kernel to accept
+# the attention-mask shape the Qwen3 model code passes in. Older versions
+# (Kaggle ships 5.0.0 as of 2026-06) make the SDPA selector fall through to
+# the math kernel which materialises the full N×N attention matrix and OOMs
+# at >=8K context. See the LOCAL_KAGGLE_V1 sweep report for the trace.
+transformers>=5.5.0
 accelerate>=1.2.0
 peft>=0.14.0
 safetensors>=0.4.5
