@@ -96,27 +96,59 @@ def _window_size_for_lever(kv_lever: str) -> Optional[int]:
 def _force_sdpa_backend_ctx():
     """Return a context manager that restricts PyTorch's SDPA backend choice.
 
-    Honours two env vars (mutually exclusive — first one set wins):
+    Auto-behaviour: on Turing (sm_75 — no FA2 support, math kernel OOMs at
+    any meaningful context), automatically restrict to mem_efficient so the
+    SDP selector can't fall through to math. PyTorch's selector otherwise
+    falls through silently and the math kernel then tries to materialise
+    O(N²) attention scores and OOMs.
+
+    Env-var overrides:
+
+      DISABLE_SDPA_BACKEND_FORCING=1
+        Turn off all forcing — let PyTorch pick freely per
+        configure_sdp_backends(). Use this if the auto-detect is misfiring
+        for some reason.
 
       FORCE_SDPA_MEM_EFFICIENT_ONLY=1
-        Restrict to ONLY the mem_efficient kernel. Useful for diagnosing
-        why the SDP selector is falling through to math at long context on
-        Turing — if mem_efficient can't accept the inputs, you'll get a
-        clean NotImplementedError instead of a math-kernel OOM. This is
-        the right setting for Kaggle T4 (sm_75) where math can't fit
-        anyway.
+        Explicitly restrict to mem_efficient (same as auto-detect on T4).
+
+      FORCE_SDPA_MEM_EFFICIENT_ONLY=0
+        Explicitly *disable* forcing even on Turing. Use this to recover
+        the old "math kernel + OOM" behaviour for diagnosis.
 
       FORCE_SDPA_BACKEND=<name>[,<name>...]
-        Comma-separated PyTorch SDPBackend names: flash, mem_efficient,
-        cudnn, math, efficient. Restrict to these in the given priority
-        order.
-
-    No env vars set → no-op context manager (PyTorch picks per its global
-    enable_*_sdp settings configured by configure_sdp_backends).
+        Comma-separated priority list: flash, mem_efficient, cudnn, math.
+        Wins over auto-detect.
     """
     import contextlib
-    force_me = os.environ.get("FORCE_SDPA_MEM_EFFICIENT_ONLY", "0") == "1"
+
+    if os.environ.get("DISABLE_SDPA_BACKEND_FORCING") == "1":
+        return contextlib.nullcontext()
+
     explicit = os.environ.get("FORCE_SDPA_BACKEND", "").strip()
+    env_force_me = os.environ.get("FORCE_SDPA_MEM_EFFICIENT_ONLY")
+
+    # Auto-detect Turing (or older) when no explicit setting.
+    force_me = False
+    if explicit:
+        pass  # explicit list takes priority
+    elif env_force_me is not None:
+        force_me = env_force_me == "1"
+    else:
+        # No env vars set — check GPU capability and decide.
+        try:
+            import torch
+            if torch.cuda.is_available():
+                for i in range(torch.cuda.device_count()):
+                    cap = torch.cuda.get_device_capability(i)
+                    if cap[0] < 8:
+                        force_me = True
+                        print(f"  [sdpa-force] auto-enabled "
+                              f"(GPU {i} is sm_{cap[0]}{cap[1]} — FA2 unavailable, "
+                              f"math kernel can't fit at long context)")
+                        break
+        except Exception:
+            pass
 
     if not force_me and not explicit:
         return contextlib.nullcontext()
