@@ -92,6 +92,64 @@ def _window_size_for_lever(kv_lever: str) -> Optional[int]:
 # run with δ-Mem only — the SW side is logged but not effective.
 
 
+def _force_sdpa_backend_ctx():
+    """Return a context manager that restricts PyTorch's SDPA backend choice.
+
+    Honours two env vars (mutually exclusive — first one set wins):
+
+      FORCE_SDPA_MEM_EFFICIENT_ONLY=1
+        Restrict to ONLY the mem_efficient kernel. Useful for diagnosing
+        why the SDP selector is falling through to math at long context on
+        Turing — if mem_efficient can't accept the inputs, you'll get a
+        clean NotImplementedError instead of a math-kernel OOM. This is
+        the right setting for Kaggle T4 (sm_75) where math can't fit
+        anyway.
+
+      FORCE_SDPA_BACKEND=<name>[,<name>...]
+        Comma-separated PyTorch SDPBackend names: flash, mem_efficient,
+        cudnn, math, efficient. Restrict to these in the given priority
+        order.
+
+    No env vars set → no-op context manager (PyTorch picks per its global
+    enable_*_sdp settings configured by configure_sdp_backends).
+    """
+    import contextlib
+    force_me = os.environ.get("FORCE_SDPA_MEM_EFFICIENT_ONLY", "0") == "1"
+    explicit = os.environ.get("FORCE_SDPA_BACKEND", "").strip()
+
+    if not force_me and not explicit:
+        return contextlib.nullcontext()
+
+    try:
+        from torch.nn.attention import SDPBackend, sdpa_kernel
+    except ImportError:
+        # torch < 2.2 — fall back to global toggles inside configure_sdp_backends
+        print("  [sdpa-force] torch.nn.attention.sdpa_kernel unavailable on this torch; skipping")
+        return contextlib.nullcontext()
+
+    if force_me:
+        backends = [SDPBackend.EFFICIENT_ATTENTION]
+    else:
+        name_map = {
+            "flash": SDPBackend.FLASH_ATTENTION,
+            "mem_efficient": SDPBackend.EFFICIENT_ATTENTION,
+            "efficient": SDPBackend.EFFICIENT_ATTENTION,
+            "cudnn": getattr(SDPBackend, "CUDNN_ATTENTION", None),
+            "math": SDPBackend.MATH,
+        }
+        backends = []
+        for name in explicit.split(","):
+            b = name_map.get(name.strip().lower())
+            if b is not None:
+                backends.append(b)
+        if not backends:
+            print(f"  [sdpa-force] FORCE_SDPA_BACKEND={explicit!r} parsed to no valid backends; skipping")
+            return contextlib.nullcontext()
+
+    print(f"  [sdpa-force] restricting SDPA to: {[b.name for b in backends]}")
+    return sdpa_kernel(backends=backends)
+
+
 def _build_eval_task(rc: "RunConfig"):
     """Dispatch on task_type. Defaults to existing 3-needle NIH for back-compat."""
     if rc.task_type == "hard_multineedle":
@@ -215,7 +273,7 @@ def _generate_with_memory_split(model, tok, prompt: str, *,
         )
         if assistant is not None:
             gen_kwargs["assistant_model"] = assistant
-        with torch.no_grad():
+        with torch.no_grad(), _force_sdpa_backend_ctx():
             out = model.generate(**inputs, **gen_kwargs)
         if torch.cuda.is_available():
             torch.cuda.synchronize()
@@ -290,10 +348,11 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
             # we can only measure overall peak. Reset before the call so we
             # exclude the model-load peak; the result lands as decode_peak.
             memory.reset_peak_vram()
-            reply = session.generate_reply(
-                user_text=nih_prompt,
-                max_new_tokens=rc.max_new_tokens,
-            )
+            with _force_sdpa_backend_ctx():
+                reply = session.generate_reply(
+                    user_text=nih_prompt,
+                    max_new_tokens=rc.max_new_tokens,
+                )
             answer = reply["assistant"]
             decode_peak = memory.measure_peak_vram()
         else:
