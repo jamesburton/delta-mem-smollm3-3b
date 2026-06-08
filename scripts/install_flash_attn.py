@@ -111,11 +111,45 @@ def pip_install_source(arch_list: str) -> int:
     )
 
 
+def _gpu_supports_fa2() -> bool:
+    """FlashAttention-2 needs sm_80+ (Ampere or newer). T4/V100/etc. (sm_75 and
+    below) cannot run FA2 at all — the kernel raises RuntimeError on first
+    forward. Installing it on those cards is pure overhead because the harness
+    will fall back to SDPA mem-efficient anyway.
+    """
+    try:
+        import torch
+        if not torch.cuda.is_available():
+            return False
+        for i in range(torch.cuda.device_count()):
+            cap = torch.cuda.get_device_capability(i)
+            if cap[0] < 8:
+                return False
+        return True
+    except ImportError:
+        return False
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--cache-dir", default=os.environ.get("WHEEL_CACHE_DIR", "wheels/kaggle/2xt4"))
     p.add_argument("--arch-list", default=os.environ.get("TORCH_CUDA_ARCH_LIST", "7.5"))
+    p.add_argument("--force", action="store_true",
+                   help="Install even if the GPU can't actually run FA2.")
     args = p.parse_args()
+
+    if not args.force and not _gpu_supports_fa2():
+        try:
+            import torch
+            caps = [str(torch.cuda.get_device_capability(i))
+                    for i in range(torch.cuda.device_count())]
+            cap_str = ", ".join(caps) if caps else "no CUDA"
+        except Exception:
+            cap_str = "unknown"
+        print(f"  GPU compute capability ({cap_str}) is below sm_80; FA2 "
+              f"requires Ampere or newer. Skipping install — the harness "
+              f"will use SDPA mem-efficient.")
+        return 0
 
     cache_dir = Path(args.cache_dir)
     env = detect_env()

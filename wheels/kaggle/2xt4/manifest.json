@@ -1,22 +1,12 @@
 {
   "profile": "kaggle/2xt4",
-  "description": "Kaggle T4×2 free-tier accelerator. Python 3.10, torch 2.10.x+cu128. Targets sm_75 (Turing). Pinned for the Apr/May 2026 stack.",
-  "python": "cp310",
+  "description": "Kaggle T4×2 free-tier accelerator. Targets sm_75 (Turing). Pinned for the Apr/May 2026 stack. Note: T4 is sm_75; FlashAttention-2 needs sm_80+ and therefore is NOT cached here — install_flash_attn.py skips the install automatically on Turing. The harness's _attn_impl_for_hardware gate falls back to SDPA mem-efficient.",
+  "python": "cp312",
   "platform": "linux_x86_64",
   "torch": "2.10.x+cu128",
   "cuda": "cu128",
-  "wheels": [
-    {
-      "name": "flash_attn-2.7.4+cu128torch2.10-cp310-cp310-linux_x86_64.whl",
-      "url": "https://github.com/jamesburton/delta-mem-smollm3-3b/releases/download/cache-kaggle-v1/flash_attn-2.7.4+cu128torch2.10-cp310-cp310-linux_x86_64.whl",
-      "fallback_urls": [
-        "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.3.13/flash_attn-2.7.4+cu128torch2.10-cp310-cp310-linux_x86_64.whl"
-      ],
-      "size_bytes": 0,
-      "sha256": "",
-      "_note": "size_bytes and sha256 left blank for first-time setup. Run `python scripts/cache_setup.py --profile kaggle/2xt4` once on Kaggle, then `sha256sum` the downloaded wheel and update this manifest before publishing. Primary URL is the future GitHub Release; the fallback is the well-known community wheel that always works for sm_75. Note that T4 (sm_75) does NOT actually run FA2 — the harness's `_attn_impl_for_hardware` gate detects this and falls back to SDPA mem-efficient. The wheel is still installed so the `import flash_attn` check in the gate doesn't trip."
-    }
-  ],
+  "_note": "Kaggle moved from Python 3.10 to 3.12 in mid-2026; the manifest tracks that. Adjust to the actual reported version (visible at bootstrap as 'python=cp312' in install_flash_attn.py's detection line) if Kaggle's runtime shifts again.",
+  "wheels": [],
   "data_caches": [
     {
       "name": "huggingface_hub",

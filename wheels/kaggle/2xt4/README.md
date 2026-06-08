@@ -5,14 +5,24 @@ and the 30-second flash-attn community lookup on every fresh kernel by mounting
 a Kaggle Dataset that holds the HF cache, and pulling the flash-attn wheel from
 a GitHub Release.
 
+## Why flash-attn is NOT cached for this profile
+
+T4 is sm_75 (Turing). FlashAttention-2 needs sm_80+ (Ampere or newer) — on
+T4 the kernel raises `RuntimeError("FlashAttention only supports Ampere GPUs
+or newer")` on first forward. `install_flash_attn.py` now has a hardware gate
+that skips the install entirely on Turing. The harness's
+`_attn_impl_for_hardware` gate (`harness/backbone.py`) detects the same thing
+and falls back to PyTorch's SDPA mem-efficient kernel at model load.
+
+So this profile has **no `wheels` entries**. The cache pattern is data-only.
+
 ## How re-use works
 
-Three layers, each cached the right way for its size:
+Two layers, each cached the right way for its size:
 
 | Artefact | Size | Where cached |
 |---|---|---|
 | **HF model cache** (Qwen3-4B base + δ-Mem adapter + Qwen3.5-MTP GGUF) | ~12 GB | Kaggle Dataset attached at `/kaggle/input/delta-mem-smollm3-3b-cache/` |
-| **flash-attn wheel** | ~150 MB | GitHub Release asset on this repo |
 | **pip wheelhouse** (transformers, accelerate, etc.) | ~500 MB | Same Kaggle Dataset (optional subdir) |
 | **delta-Mem upstream clone** | <1 MB | Re-cloned each session (negligible) |
 
@@ -66,27 +76,6 @@ Run the notebook normally. It will:
    │   └── ...
    └── pip_wheelhouse/          # (optional) pip wheels cached here
    ```
-
-### Step 3: Upload the flash-attn wheel to a GitHub Release
-
-The wheel cached at `wheels/kaggle/2xt4/` during step 1 should be uploaded as
-a release asset:
-
-```bash
-# From a checkout of the repo:
-gh release create cache-kaggle-v1 wheels/kaggle/2xt4/flash_attn-*.whl \
-  --title "Kaggle T4×2 cached wheels v1" \
-  --notes "Cached binaries to skip downloads on Kaggle T4×2 cold starts."
-```
-
-### Step 4: Fill in size_bytes + sha256 in the manifest
-
-```bash
-ls -la wheels/kaggle/2xt4/flash_attn-*.whl  # size_bytes
-sha256sum wheels/kaggle/2xt4/flash_attn-*.whl  # sha256
-```
-
-Edit `manifest.json` with the actual values, commit, push.
 
 ## Per-run workflow (after one-time setup)
 
