@@ -1,0 +1,8 @@
+{
+  "cell_id": "2",
+  "title": "Qwen3-4B + \u03b4-Mem adapter",
+  "status": "failed",
+  "error": "NameError(\"name 'os' is not defined\")",
+  "context_tokens": 32000,
+  "wall_clock_seconds": 10.104444187000126
+}

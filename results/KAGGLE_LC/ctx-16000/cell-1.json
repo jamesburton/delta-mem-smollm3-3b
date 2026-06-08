@@ -1,0 +1,8 @@
+{
+  "cell_id": "1",
+  "title": "Qwen3-4B vanilla full attention",
+  "status": "failed",
+  "error": "NameError(\"name 'os' is not defined\")",
+  "context_tokens": 16000,
+  "wall_clock_seconds": 50.492549859000064
+}
