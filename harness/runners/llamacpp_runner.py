@@ -110,12 +110,15 @@ def run(cell: Cell, base_cfg) -> Dict[str, Any]:
         )
     prompt = task.context + "\n\n" + task.question
 
-    # Size the context window. NIH-task token estimates use word-count as a
-    # proxy; actual tokens come in at ~2× target. Add the decode budget.
-    # Round up to the next 2K-aligned boundary, capped at 32K (model native).
-    rough_prompt_tokens = base_cfg.target_tokens * 2
-    n_ctx_needed = rough_prompt_tokens + base_cfg.max_new_tokens + 512
-    n_ctx = min(32768, max(4096, ((n_ctx_needed + 2047) // 2048) * 2048))
+    # Size the context window. The NIH task estimates target in words; the
+    # actual tokens come in at ~2× target (easy task), or higher for the
+    # hard task once distractors and the longer question are included. We
+    # pad generously and round up to the next 2K-aligned boundary. Cap at
+    # 128K — Qwen3.5-MTP is trained for 262K so we have headroom, but
+    # n_ctx allocates KV cache so a larger cap costs VRAM up front.
+    rough_prompt_tokens = int(base_cfg.target_tokens * 2.2)
+    n_ctx_needed = rough_prompt_tokens + base_cfg.max_new_tokens + 1024
+    n_ctx = min(131072, max(4096, ((n_ctx_needed + 2047) // 2048) * 2048))
     print(f"  n_ctx={n_ctx}  (prompt budget ~{rough_prompt_tokens} + decode {base_cfg.max_new_tokens})")
 
     mem_before_load = _gpu_mem_used_bytes()

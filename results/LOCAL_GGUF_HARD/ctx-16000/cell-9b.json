@@ -1,0 +1,12 @@
+{
+  "cell_id": "9b",
+  "title": "Qwen3.5-4B-MTP-GGUF Q5_K_M",
+  "status": "failed",
+  "error": "generation failed: ValueError('Requested tokens (32931) exceed context window of 32768'); prompt_tokens=32931, n_ctx=32768",
+  "memory": {
+    "post_load_used_vram_bytes": 6517948416,
+    "pre_load_used_vram_bytes": 986710016
+  },
+  "context_tokens": 16000,
+  "wall_clock_seconds": 62.767210100078955
+}
