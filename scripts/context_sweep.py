@@ -76,6 +76,7 @@ def _run_combo_inproc(cell, cfg, ctx: int) -> dict:
 def _run_combo_subproc(
     cell, ctx: int, ctx_dir: Path, *,
     max_new_tokens: int, dtype: str, device: str, seed: int,
+    task_type: str = "multineedle", n_needles: int = 3, n_distractors: int = 30,
 ) -> dict:
     """Run one (cell, ctx) combo in a fresh python subprocess.
 
@@ -94,6 +95,9 @@ def _run_combo_subproc(
         "--stage", ctx_dir.parent.name,
         "--max-new-tokens", str(max_new_tokens),
         "--dtype", dtype,
+        "--task-type", task_type,
+        "--n-needles", str(n_needles),
+        "--n-distractors", str(n_distractors),
     ]
     if device:
         cmd += ["--device", device]
@@ -132,11 +136,18 @@ def run_sweep(
     stage: str = "S3",
     seed: int = 0,
     isolate: bool = True,
+    task_type: str = "multineedle",
+    n_needles: int = 3,
+    n_distractors: int = 30,
 ) -> List[dict]:
     """Run the sweep. Returns list of result dicts (one per combo).
 
     With isolate=True (default), each (cell, ctx) runs in a fresh subprocess so
     a CUDA wedge or OOM in one combo can't poison the rest of the sweep.
+
+    task_type:
+      - "multineedle"      → original 3-needle NIH
+      - "hard_multineedle" → 10-needle + distractors + mapping check
     """
     import torch
     if device is None:
@@ -158,29 +169,43 @@ def run_sweep(
                     cell, ctx, ctx_dir,
                     max_new_tokens=max_new_tokens, dtype=dtype,
                     device=device, seed=seed,
+                    task_type=task_type, n_needles=n_needles,
+                    n_distractors=n_distractors,
                 )
             else:
                 cfg = RunConfig(
                     target_tokens=ctx,
-                    n_needles=3,
+                    n_needles=n_needles,
                     max_new_tokens=max_new_tokens,
                     seed=seed,
                     dtype=dtype,
                     device=device,
                     results_dir=ctx_dir,
+                    task_type=task_type,
+                    n_distractors=n_distractors,
                 )
                 rec = _run_combo_inproc(cell, cfg, ctx)
             status = rec.get("status", "?")
-            q = rec.get("quality", {}).get("multineedle", {})
-            frac = q.get("fraction")
+            qual = rec.get("quality", {})
+            # Either eval payload may be present. Display fraction_correct
+            # for hard tasks, falling back to the easy-NIH fraction otherwise.
+            hard = qual.get("hard_multineedle")
+            if hard is not None:
+                frac = hard.get("fraction_correct")
+                extra = (f" dist={hard.get('distractors_mentioned', 0)}/"
+                         f"{hard.get('n_distractors', 0)}")
+            else:
+                frac = qual.get("multineedle", {}).get("fraction")
+                extra = ""
             s = rec.get("speed", {})
             peak_gb = rec.get("memory", {}).get("peak_vram_bytes", 0) / (1024**3)
             tps = s.get('decode_tokens_per_second') or 0
             ttft = s.get('ttft_seconds')
             ttft_s = f"{ttft:.3f}s" if isinstance(ttft, (int, float)) else "n/a"
+            frac_s = f"{frac:.2f}" if isinstance(frac, (int, float)) else "N/A"
             print(
                 f"  → ctx={ctx} cell={cell.id}  {status}  "
-                f"NIH={frac if isinstance(frac, (int, float)) else 'N/A':<5}  "
+                f"NIH={frac_s}{extra}  "
                 f"peak={peak_gb:.1f}GiB  "
                 f"tok/s={tps:.1f}  "
                 f"TTFT={ttft_s}  "
@@ -202,29 +227,67 @@ def render_sweep_summary(results: List[dict]) -> str:
         if not rows:
             continue
         title = rows[0].get("title", cid)
+        # Detect whether this batch carries hard or easy eval payloads;
+        # they don't share columns. If any row has hard_multineedle,
+        # render the hard table; else the legacy NIH table.
+        has_hard = any(r.get("quality", {}).get("hard_multineedle") for r in rows)
         out_lines.append(f"## Cell {cid} — {title}")
         out_lines.append("")
-        out_lines.append("| Context | Status | NIH frac | Peak VRAM | KV @ ctx | decode tok/s | TTFT (s) | Wall (s) |")
-        out_lines.append("|---|---|---|---|---|---|---|---|")
+        if has_hard:
+            out_lines.append(
+                "| Context | Status | Correct | Distractors | "
+                "Precision | Peak VRAM | decode tok/s | Wall (s) |"
+            )
+            out_lines.append("|---|---|---|---|---|---|---|---|")
+        else:
+            out_lines.append(
+                "| Context | Status | NIH frac | Peak VRAM | KV @ ctx | "
+                "decode tok/s | TTFT (s) | Wall (s) |"
+            )
+            out_lines.append("|---|---|---|---|---|---|---|---|")
         for r in rows:
-            q = r.get("quality", {}).get("multineedle", {})
+            qual = r.get("quality", {})
             m = r.get("memory", {})
             s = r.get("speed", {})
-            frac = q.get("fraction")
-            frac_cell = f"{frac:.2f}" if isinstance(frac, (int, float)) else "N/A"
             tps = s.get('decode_tokens_per_second') or 0
-            ttft = s.get('ttft_seconds')
-            ttft_s = f"{ttft:.3f}" if isinstance(ttft, (int, float)) else "n/a"
-            out_lines.append(
-                f"| {r.get('context_tokens', '?')} "
-                f"| {r.get('status', '?')} "
-                f"| {frac_cell} "
-                f"| {_fmt_bytes(m.get('peak_vram_bytes', 0))} "
-                f"| {_fmt_bytes(m.get('kv_cache_bytes_at_target_len', 0))} "
-                f"| {tps:.1f} "
-                f"| {ttft_s} "
-                f"| {r.get('wall_clock_seconds', 0):.1f} |"
-            )
+            hard = qual.get("hard_multineedle")
+            if has_hard:
+                if hard is None:
+                    out_lines.append(
+                        f"| {r.get('context_tokens', '?')} "
+                        f"| {r.get('status', '?')} | N/A | N/A | N/A "
+                        f"| {_fmt_bytes(m.get('peak_vram_bytes', 0))} "
+                        f"| {tps:.1f} | {r.get('wall_clock_seconds', 0):.1f} |"
+                    )
+                else:
+                    frac = hard.get("fraction_correct")
+                    prec = hard.get("precision_against_distractors")
+                    out_lines.append(
+                        f"| {r.get('context_tokens', '?')} "
+                        f"| {r.get('status', '?')} "
+                        f"| {frac:.2f} "
+                        f"| {hard.get('distractors_mentioned', 0)}/"
+                        f"{hard.get('n_distractors', 0)} "
+                        f"| {prec:.2f} "
+                        f"| {_fmt_bytes(m.get('peak_vram_bytes', 0))} "
+                        f"| {tps:.1f} "
+                        f"| {r.get('wall_clock_seconds', 0):.1f} |"
+                    )
+            else:
+                frac = qual.get("multineedle", {}).get("fraction")
+                frac_cell = f"{frac:.2f}" if isinstance(frac, (int, float)) else "N/A"
+                ttft = s.get('ttft_seconds')
+                ttft_s = f"{ttft:.3f}" if isinstance(ttft, (int, float)) else "n/a"
+                out_lines.append(
+                    f"| {r.get('context_tokens', '?')} "
+                    f"| {r.get('status', '?')} "
+                    f"| {frac_cell} "
+                    f"| {_fmt_bytes(m.get('peak_vram_bytes', 0))} "
+                    f"| {_fmt_bytes(m.get('kv_cache_bytes_at_target_len', 0))} "
+                    f"| {tps:.1f} "
+                    f"| {ttft_s} "
+                    f"| {r.get('wall_clock_seconds', 0):.1f} |"
+                )
         out_lines.append("")
     return "\n".join(out_lines)
 
@@ -249,7 +312,10 @@ def _fmt_bytes(n):
 def _worker_one_combo(spec: str, *,
                       results_root: Path, stage: str,
                       max_new_tokens: int, dtype: str,
-                      device: Optional[str]) -> int:
+                      device: Optional[str],
+                      task_type: str = "multineedle",
+                      n_needles: int = 3,
+                      n_distractors: int = 30) -> int:
     """Worker mode: run exactly one (cell, ctx) combo and exit.
 
     Used by `_run_combo_subproc` to isolate GPU state per combo. Writes the
@@ -268,12 +334,14 @@ def _worker_one_combo(spec: str, *,
     eff_device = device or ("auto" if torch.cuda.is_available() else "cpu")
     cfg = RunConfig(
         target_tokens=ctx,
-        n_needles=3,
+        n_needles=n_needles,
         max_new_tokens=max_new_tokens,
         seed=0,
         dtype=dtype,
         device=eff_device,
         results_dir=ctx_dir,
+        task_type=task_type,
+        n_distractors=n_distractors,
     )
     rec = _run_combo_inproc(cell, cfg, ctx)
     return 0 if rec.get("status") == "ok" else 1
@@ -293,6 +361,18 @@ def main() -> int:
     p.add_argument("--no-isolate", action="store_true",
                    help="Run all combos in-process (faster startup, but one "
                         "OOM/CUDA wedge poisons the rest of the sweep).")
+    p.add_argument("--task-type", default=os.environ.get("TASK_TYPE", "multineedle"),
+                   choices=("multineedle", "hard_multineedle"),
+                   help="Eval task. 'hard_multineedle' = 10-needle + "
+                        "distractors + mapping check; the harder probe to use "
+                        "when comparing models that saturate the simple NIH.")
+    p.add_argument("--n-needles", type=int,
+                   default=int(os.environ.get("N_NEEDLES", "3")),
+                   help="Needle count. Defaults to 10 when task-type is "
+                        "hard_multineedle and this arg is left at 3.")
+    p.add_argument("--n-distractors", type=int,
+                   default=int(os.environ.get("N_DISTRACTORS", "30")),
+                   help="Distractor code count (hard_multineedle only).")
     p.add_argument("--_one_combo", default=None,
                    help=argparse.SUPPRESS)  # internal worker mode
     args = p.parse_args()
@@ -303,6 +383,8 @@ def main() -> int:
             results_root=args.results_root, stage=args.stage,
             max_new_tokens=args.max_new_tokens, dtype=args.dtype,
             device=args.device,
+            task_type=args.task_type, n_needles=args.n_needles,
+            n_distractors=args.n_distractors,
         )
 
     contexts = [int(c.strip()) for c in args.contexts.split(",") if c.strip()]
@@ -316,6 +398,9 @@ def main() -> int:
         results_root=args.results_root,
         stage=args.stage,
         isolate=not args.no_isolate,
+        task_type=args.task_type,
+        n_needles=args.n_needles,
+        n_distractors=args.n_distractors,
     )
     md = render_sweep_summary(results)
     sweep_path = args.results_root / args.stage / "context_sweep.md"

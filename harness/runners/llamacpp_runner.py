@@ -93,11 +93,21 @@ def run(cell: Cell, base_cfg) -> Dict[str, Any]:
         return _failed_record(cell, base_cfg, f"GGUF resolve failed: {e!r}")
     print(f"  using {gguf_path.name} ({gguf_path.stat().st_size/1024**3:.2f} GB)")
 
-    task = quality.make_multineedle_task(
-        target_tokens=base_cfg.target_tokens,
-        n_needles=base_cfg.n_needles,
-        seed=base_cfg.seed,
-    )
+    task_type = getattr(base_cfg, "task_type", "multineedle")
+    if task_type == "hard_multineedle":
+        n_needles = base_cfg.n_needles if base_cfg.n_needles != 3 else 10
+        task = quality.make_hard_multineedle_task(
+            target_tokens=base_cfg.target_tokens,
+            n_needles=n_needles,
+            n_distractors=getattr(base_cfg, "n_distractors", 30),
+            seed=base_cfg.seed,
+        )
+    else:
+        task = quality.make_multineedle_task(
+            target_tokens=base_cfg.target_tokens,
+            n_needles=base_cfg.n_needles,
+            seed=base_cfg.seed,
+        )
     prompt = task.context + "\n\n" + task.question
 
     # Size the context window. NIH-task token estimates use word-count as a
@@ -168,7 +178,31 @@ def run(cell: Cell, base_cfg) -> Dict[str, Any]:
     print(f"  generated {completion_tokens} tokens in {decode_seconds:.1f}s = "
           f"{dec_tps:.1f} tok/s; GPU used after: {mem_after_decode/1024**3:.2f} GiB")
 
-    nih_score = quality.score_multineedle(task, answer)
+    if task_type == "hard_multineedle":
+        s = quality.score_hard_multineedle(task, answer)
+        quality_payload = {
+            "hard_multineedle": {
+                "per_needle_correct": s.per_needle_correct,
+                "n_needles": s.n_needles,
+                "n_distractors": s.n_distractors,
+                "distractors_mentioned": s.distractors_mentioned,
+                "fraction_correct": s.fraction_correct,
+                "recall_all": s.recall_all,
+                "precision_against_distractors": s.precision_against_distractors,
+            },
+        }
+        recall_signal = any(s.per_needle_correct)
+    else:
+        s = quality.score_multineedle(task, answer)
+        quality_payload = {
+            "multineedle": {
+                "per_needle": s.per_needle,
+                "recall_all": s.recall_all,
+                "recall_any": s.recall_any,
+                "fraction": s.fraction,
+            },
+        }
+        recall_signal = s.recall_any
 
     try:
         llm.close() if hasattr(llm, "close") else None
@@ -178,16 +212,8 @@ def run(cell: Cell, base_cfg) -> Dict[str, Any]:
     return {
         "cell_id": cell.id,
         "title": cell.title,
-        "status": "ok" if nih_score.recall_any else "partial",
-        "quality": {
-            "multineedle": {
-                "per_needle": nih_score.per_needle,
-                "recall_all": nih_score.recall_all,
-                "recall_any": nih_score.recall_any,
-                "fraction": nih_score.fraction,
-            },
-            "perplexity": None,
-        },
+        "status": "ok" if recall_signal else "partial",
+        "quality": {**quality_payload, "perplexity": None},
         "memory": {
             # nvidia-smi deltas — coarser than HF runner's torch.cuda hooks
             # because llama.cpp allocates outside PyTorch. Use these as the

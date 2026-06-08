@@ -25,6 +25,13 @@ class RunConfig:
     ppl_text: Optional[str] = None
     assistant_model_id: Optional[str] = None     # set for spec-decode cells
     delta_mem_adapter_id: Optional[str] = None   # set for δ-Mem cells
+    # "multineedle" = original 3-needle NIH (existing behaviour, default for
+    # backwards compatibility). "hard_multineedle" = RULER-style harder NIH:
+    # more needles by default, code-shaped distractors in the context, scorer
+    # checks key→code mapping. Use the hard variant when comparing models
+    # that have already saturated the simple NIH at 1.00.
+    task_type: str = "multineedle"
+    n_distractors: int = 30                      # only used by hard_multineedle
 
 
 def _resolve_cell_config(cell: Cell, base: RunConfig) -> RunConfig:
@@ -43,6 +50,8 @@ def _resolve_cell_config(cell: Cell, base: RunConfig) -> RunConfig:
         ppl_text=base.ppl_text,
         assistant_model_id=assistant,
         delta_mem_adapter_id=adapter,
+        task_type=base.task_type,
+        n_distractors=base.n_distractors,
     )
 
 
@@ -81,6 +90,59 @@ def _window_size_for_lever(kv_lever: str) -> Optional[int]:
 # and won't pick up a runtime flip. The δ-Mem path bypasses backbone's
 # loader entirely, so cells 4 (SW-4K+δ-Mem) and 5 (SW-2K+δ-Mem) currently
 # run with δ-Mem only — the SW side is logged but not effective.
+
+
+def _build_eval_task(rc: "RunConfig"):
+    """Dispatch on task_type. Defaults to existing 3-needle NIH for back-compat."""
+    if rc.task_type == "hard_multineedle":
+        # n_needles default jumps from 3 → 10 when caller didn't override.
+        n = rc.n_needles if rc.n_needles != 3 else 10
+        return quality.make_hard_multineedle_task(
+            target_tokens=rc.target_tokens,
+            n_needles=n,
+            n_distractors=rc.n_distractors,
+            seed=rc.seed,
+        )
+    return quality.make_multineedle_task(
+        target_tokens=rc.target_tokens,
+        n_needles=rc.n_needles,
+        seed=rc.seed,
+    )
+
+
+def _score_eval(rc: "RunConfig", task, answer: str):
+    """Score the answer for the chosen task type.
+
+    Returns (quality_payload_dict, recall_signal_bool). The payload is
+    embedded directly in result["quality"] (alongside perplexity etc.),
+    so cells of different eval types remain comparable when read back.
+    The recall_signal drives the top-level status flag.
+    """
+    if rc.task_type == "hard_multineedle":
+        s = quality.score_hard_multineedle(task, answer)
+        payload = {
+            "hard_multineedle": {
+                "per_needle_correct": s.per_needle_correct,
+                "n_needles": s.n_needles,
+                "n_distractors": s.n_distractors,
+                "distractors_mentioned": s.distractors_mentioned,
+                "fraction_correct": s.fraction_correct,
+                "recall_all": s.recall_all,
+                "precision_against_distractors": s.precision_against_distractors,
+            },
+        }
+        # Any-recall = at least one needle correctly mapped.
+        return payload, any(s.per_needle_correct)
+    s = quality.score_multineedle(task, answer)
+    payload = {
+        "multineedle": {
+            "per_needle": s.per_needle,
+            "recall_all": s.recall_all,
+            "recall_any": s.recall_any,
+            "fraction": s.fraction,
+        },
+    }
+    return payload, s.recall_any
 
 
 def _generate_with_memory_split(model, tok, prompt: str, *,
@@ -218,12 +280,7 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
         if session is not None and rc.assistant_model_id:
             print(f"  ⚠️ cell {cell.id}: δ-Mem + spec-decode is not yet supported by the upstream runtime; running δ-Mem only")
 
-        task = quality.make_multineedle_task(
-            target_tokens=rc.target_tokens,
-            n_needles=rc.n_needles,
-            seed=rc.seed,
-        )
-
+        task = _build_eval_task(rc)
         nih_prompt = task.context + "\n\n" + task.question
         prefill_peak: Optional[int] = None
         decode_peak: Optional[int] = None
@@ -250,7 +307,7 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
                     assistant=asst,
                 )
 
-        nih_score = quality.score_multineedle(task, answer)
+        quality_payload, recall_signal = _score_eval(rc, task, answer)
 
         # Speed timing uses plain generate even for δ-Mem cells — measuring the
         # session's generate_reply path would require a separate timing harness
@@ -274,14 +331,9 @@ def run(cell: Cell, base_cfg: RunConfig) -> Dict[str, Any]:
         record = {
             "cell_id": cell.id,
             "title": cell.title,
-            "status": "ok" if nih_score.recall_any else "partial",
+            "status": "ok" if recall_signal else "partial",
             "quality": {
-                "multineedle": {
-                    "per_needle": nih_score.per_needle,
-                    "recall_all": nih_score.recall_all,
-                    "recall_any": nih_score.recall_any,
-                    "fraction": nih_score.fraction,
-                },
+                **quality_payload,
                 "perplexity": ppl,
             },
             "memory": {
