@@ -1,12 +1,80 @@
 {
   "cell_id": "9b",
   "title": "Qwen3.5-4B-MTP-GGUF Q5_K_M",
-  "status": "failed",
-  "error": "generation failed: ValueError('Requested tokens (32931) exceed context window of 32768'); prompt_tokens=32931, n_ctx=32768",
-  "memory": {
-    "post_load_used_vram_bytes": 6517948416,
-    "pre_load_used_vram_bytes": 986710016
+  "status": "ok",
+  "quality": {
+    "hard_multineedle": {
+      "per_needle_correct": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "n_needles": 10,
+      "n_distractors": 30,
+      "distractors_mentioned": 0,
+      "fraction_correct": 1.0,
+      "recall_all": true,
+      "precision_against_distractors": 1.0
+    },
+    "perplexity": null
   },
+  "memory": {
+    "peak_vram_bytes": 7516192768,
+    "kv_cache_bytes_at_target_len": 0,
+    "prefill_peak_vram_bytes": null,
+    "decode_peak_vram_bytes": 7516192768,
+    "decode_resident_vram_bytes": 7516192768,
+    "pre_load_used_vram_bytes": 1033895936,
+    "post_load_used_vram_bytes": 6961496064
+  },
+  "speed": {
+    "prefill_seconds": null,
+    "ttft_seconds": null,
+    "decode_seconds": 77.29201829992235,
+    "new_tokens": 1024,
+    "decode_tokens_per_second": 13.248457247247595
+  },
+  "config": {
+    "cell": {
+      "id": "9b",
+      "title": "Qwen3.5-4B-MTP-GGUF Q5_K_M",
+      "base_model": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "stack": "llamacpp",
+      "stages": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "kv_lever": "none",
+      "speed_lever": "native-MTP",
+      "blocked_by": null,
+      "notes": ""
+    },
+    "run": {
+      "target_tokens": 16000,
+      "n_needles": 10,
+      "max_new_tokens": 1024,
+      "dtype": "gguf",
+      "device": "cuda",
+      "gguf_quant": "Q5_K_M",
+      "n_ctx": 38912,
+      "n_gpu_layers": -1
+    },
+    "backbone": {
+      "model_id": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "gguf_file": "Qwen3.5-4B-Q5_K_M.gguf",
+      "stack": "llamacpp"
+    }
+  },
+  "answer_preview": ".\n\n<think>\nThinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: A long text containing interleaved \"Lorem ipsum\" text, log markers, audit IDs, ticket refs, and specific \"The secret code for KEY is CODE\" sentences.\n    *   Task: Extract ONLY the secret codes associated with specific keys provided in the list.\n    *   Keys to recall: yankee, ferret, charlie, quebec, kestrel, ibis, zulu, tango, tapir, whiskey.\n    *   Output Format: 'key: CODE' on separate lines.\n    *   Constraint: Recall ONLY the secret codes (ignore the log entries).\n\n2.  **Scan the Text for Keywords:**\n    I need to look for the pattern \"The secret code for [KEY] is [CODE].\" within the provided text.\n\n    *   *Scan 1:* \"The secret code for yankee is QX52-89U.\" (Found early in the text)\n    *   *Scan 2:* \"The secret code for ferret is VZ57-28Q.\" (Found later)\n    *   *Scan 3:* \"The secret code for charlie is HT86-22M.\" (Found later)\n    *   *Scan 4:* \"The secret code for quebec is JH62-66P.\" (Found later)\n    *   *Scan 5:* \"The secret code for kestrel is WG85-61A.\" (Found later)\n    *   *Scan 6:* \"The secret code for ibis is TU66-52V.\" (Found later)\n    *   *Scan 7:* \"The secret code for zulu is FH81-40P.\" (Found later)\n    *   *Scan 8:* \"The secret code for tango is VD50-75Z.\" (Found later)\n    *   *Scan 9:* \"The secret code for tapir is ZM32-52C.\" (Found later)\n    *   *Scan 10:* \"The secret code for whiskey is VN96-66Q.\" (Found later)\n\n3.  **Verify the Codes:**\n    *   yankee: QX52-89U\n    *   ferret: VZ57-28Q\n    *   charlie: HT86-22M\n    *   quebec: JH62-66P\n    *   kestrel: WG85-61A\n    *   ibis: TU66-52V\n    *   zulu: FH81-40P\n    *   tango: VD50-75Z\n    *   tapir: ZM32-52C\n    *   whiskey: VN96-66Q\n\n4.  **Format the Output:**\n    The user requested the format 'key: CODE' on separate lines.\n\n    *   yankee: QX52-89U\n    *   ferret: VZ57-28Q\n    *   charlie: HT86-22M\n    *   quebec: JH62-66P\n    *   kestrel: WG85-61A\n    *   ibis: TU66-52V\n    *   zulu: FH81-40P\n    *   tango: VD50-75Z\n    *   tapir: ZM32-52C\n    *   whiskey: VN96-66Q\n\n5.  **Final Review:**\n    Check against the provided keys list: yankee, ferret, charlie, quebec, kestrel, ibis, zulu, tango, tapir, whiskey.\n    All 10 keys are present in the text and extracted correctly.\n    Ensure no log entries (like \"Log marker CV32-33E logged at offset 349704.\") are included in the output.\n    Ensure the format matches exactly 'key: CODE'.\n\n    Double-checking the text locations to ensure accuracy:\n    1.  \"The secret code for yankee is QX52-89U.\" -> yankee: QX52-89U\n    2.  \"The secret code for ferret is VZ57-28Q.\" -> ferret: VZ57-28Q\n    3.  \"The secret code for charlie is HT86-22M.\" -> charlie: HT86-22",
+  "timestamp": "2026-06-08T11:14:34.258251Z",
   "context_tokens": 16000,
-  "wall_clock_seconds": 62.767210100078955
+  "wall_clock_seconds": 109.46377779985778
 }

@@ -1,12 +1,80 @@
 {
   "cell_id": "9a",
   "title": "Qwen3.5-4B-MTP-GGUF Q4_K_M",
-  "status": "failed",
-  "error": "generation failed: ValueError('Requested tokens (64931) exceed context window of 32768'); prompt_tokens=64931, n_ctx=32768",
-  "memory": {
-    "post_load_used_vram_bytes": 6122635264,
-    "pre_load_used_vram_bytes": 986710016
+  "status": "partial",
+  "quality": {
+    "hard_multineedle": {
+      "per_needle_correct": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "n_needles": 10,
+      "n_distractors": 30,
+      "distractors_mentioned": 3,
+      "fraction_correct": 0.0,
+      "recall_all": false,
+      "precision_against_distractors": 0.0
+    },
+    "perplexity": null
   },
+  "memory": {
+    "peak_vram_bytes": 10017046528,
+    "kv_cache_bytes_at_target_len": 0,
+    "prefill_peak_vram_bytes": null,
+    "decode_peak_vram_bytes": 10017046528,
+    "decode_resident_vram_bytes": 10017046528,
+    "pre_load_used_vram_bytes": 1034944512,
+    "post_load_used_vram_bytes": 8939110400
+  },
+  "speed": {
+    "prefill_seconds": null,
+    "ttft_seconds": null,
+    "decode_seconds": 144.5835796999745,
+    "new_tokens": 1024,
+    "decode_tokens_per_second": 7.082408681019678
+  },
+  "config": {
+    "cell": {
+      "id": "9a",
+      "title": "Qwen3.5-4B-MTP-GGUF Q4_K_M",
+      "base_model": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "stack": "llamacpp",
+      "stages": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "kv_lever": "none",
+      "speed_lever": "native-MTP",
+      "blocked_by": null,
+      "notes": ""
+    },
+    "run": {
+      "target_tokens": 32000,
+      "n_needles": 10,
+      "max_new_tokens": 1024,
+      "dtype": "gguf",
+      "device": "cuda",
+      "gguf_quant": "Q4_K_M",
+      "n_ctx": 73728,
+      "n_gpu_layers": -1
+    },
+    "backbone": {
+      "model_id": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "gguf_file": "Qwen3.5-4B-Q4_K_M.gguf",
+      "stack": "llamacpp"
+    }
+  },
+  "answer_preview": ", tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tap to recall.\n\n<think>\nThinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: A long text containing interleaved log entries and secret code entries.\n    *   Task: Extract ONLY the secret codes associated with specific keys.\n    *   Keys to recall: yankee, ferret, charlie, quebec, kestrel, ibis, zulu, tango, tapir, whiskey. (Note: The prompt lists \"tapir\" many times, but I need to check if there are multiple entries for \"tapir\" or if it's just a list of keys to look for. Looking at the text, I need to find the specific lines \"The secret code for [KEY] is [CODE].\" and extract the CODE for the specified keys.)\n    *   Output Format: 'key: CODE' on separate lines, one per key.\n    *   Constraint: Recall ONLY the secret codes (ignore the log entries).\n\n2.  **Scan the Text for Target Keys:**\n    I need to search for the pattern \"The secret code for [KEY] is [CODE].\"\n    The keys mentioned in the prompt's instruction list are: yankee, ferret, charlie, quebec, kestrel, ibis, zulu, tango, tapir, whiskey.\n\n    Let's scan the text for these specific keys.\n\n    *   Search for \"yankee\":\n        *   Found: \"The secret code for yankee is QX52-89U.\"\n        *   Code: QX52-89U\n\n    *   Search for \"ferret\":\n        *   Found: \"The secret code for ferret is VZ57-28Q.\"\n        *   Code: VZ57-28Q\n\n    *   Search for \"charlie\":\n        *   Found: \"The secret code for charlie is HT86-22M.\"\n        *   Code: HT86-22M\n\n    *   Search for \"quebec\":\n        *   Found: \"The secret code for quebec is JH62-66P.\"",
+  "timestamp": "2026-06-08T11:19:33.709833Z",
   "context_tokens": 32000,
-  "wall_clock_seconds": 52.172678199829534
+  "wall_clock_seconds": 184.2787487001624
 }

@@ -1,12 +1,80 @@
 {
   "cell_id": "9c",
   "title": "Qwen3.5-4B-MTP-GGUF Q8_0",
-  "status": "failed",
-  "error": "generation failed: ValueError('Requested tokens (64931) exceed context window of 32768'); prompt_tokens=64931, n_ctx=32768",
-  "memory": {
-    "post_load_used_vram_bytes": 7913603072,
-    "pre_load_used_vram_bytes": 995098624
+  "status": "partial",
+  "quality": {
+    "hard_multineedle": {
+      "per_needle_correct": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "n_needles": 10,
+      "n_distractors": 30,
+      "distractors_mentioned": 0,
+      "fraction_correct": 0.0,
+      "recall_all": false,
+      "precision_against_distractors": 0.0
+    },
+    "perplexity": null
   },
+  "memory": {
+    "peak_vram_bytes": 11778654208,
+    "kv_cache_bytes_at_target_len": 0,
+    "prefill_peak_vram_bytes": null,
+    "decode_peak_vram_bytes": 11778654208,
+    "decode_resident_vram_bytes": 11778654208,
+    "pre_load_used_vram_bytes": 1034944512,
+    "post_load_used_vram_bytes": 10715398144
+  },
+  "speed": {
+    "prefill_seconds": null,
+    "ttft_seconds": null,
+    "decode_seconds": 147.65463069989346,
+    "new_tokens": 1024,
+    "decode_tokens_per_second": 6.935102510135762
+  },
+  "config": {
+    "cell": {
+      "id": "9c",
+      "title": "Qwen3.5-4B-MTP-GGUF Q8_0",
+      "base_model": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "stack": "llamacpp",
+      "stages": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "kv_lever": "none",
+      "speed_lever": "native-MTP",
+      "blocked_by": null,
+      "notes": ""
+    },
+    "run": {
+      "target_tokens": 32000,
+      "n_needles": 10,
+      "max_new_tokens": 1024,
+      "dtype": "gguf",
+      "device": "cuda",
+      "gguf_quant": "Q8_0",
+      "n_ctx": 73728,
+      "n_gpu_layers": -1
+    },
+    "backbone": {
+      "model_id": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "gguf_file": "Qwen3.5-4B-Q8_0.gguf",
+      "stack": "llamacpp"
+    }
+  },
+  "answer_preview": ", tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist, tapist,",
+  "timestamp": "2026-06-08T11:25:52.077212Z",
   "context_tokens": 32000,
-  "wall_clock_seconds": 53.68011899990961
+  "wall_clock_seconds": 189.89632389997132
 }
