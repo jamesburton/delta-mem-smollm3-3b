@@ -1,0 +1,70 @@
+{
+  "cell_id": "9b",
+  "title": "Qwen3.5-4B-MTP-GGUF Q5_K_M",
+  "status": "ok",
+  "quality": {
+    "multineedle": {
+      "per_needle": [
+        true,
+        true,
+        true
+      ],
+      "recall_all": true,
+      "recall_any": true,
+      "fraction": 1.0
+    },
+    "perplexity": null
+  },
+  "memory": {
+    "peak_vram_bytes": 5308940288,
+    "kv_cache_bytes_at_target_len": 0,
+    "prefill_peak_vram_bytes": null,
+    "decode_peak_vram_bytes": 5308940288,
+    "decode_resident_vram_bytes": 5308940288,
+    "pre_load_used_vram_bytes": 1034944512,
+    "post_load_used_vram_bytes": 5166333952
+  },
+  "speed": {
+    "prefill_seconds": null,
+    "ttft_seconds": null,
+    "decode_seconds": 23.909337299875915,
+    "new_tokens": 512,
+    "decode_tokens_per_second": 21.414227988772286
+  },
+  "config": {
+    "cell": {
+      "id": "9b",
+      "title": "Qwen3.5-4B-MTP-GGUF Q5_K_M",
+      "base_model": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "stack": "llamacpp",
+      "stages": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "kv_lever": "none",
+      "speed_lever": "native-MTP",
+      "blocked_by": null,
+      "notes": ""
+    },
+    "run": {
+      "target_tokens": 4000,
+      "n_needles": 3,
+      "max_new_tokens": 512,
+      "dtype": "gguf",
+      "device": "cuda",
+      "gguf_quant": "Q5_K_M",
+      "n_ctx": 10240,
+      "n_gpu_layers": -1
+    },
+    "backbone": {
+      "model_id": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "gguf_file": "Qwen3.5-4B-Q5_K_M.gguf",
+      "stack": "llamacpp"
+    }
+  },
+  "answer_preview": "\n\n<think>\nThinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: A long text containing repeated \"Lorem ipsum dolor sit amet...\" sentences interspersed with specific sentences containing secret codes.\n    *   Task: Recall the secret codes mentioned in the text.\n    *   Output Format: 'key: CODE' on separate lines, one per key.\n    *   Keys to recall: golf, lima, alpha.\n\n2.  **Scan the Text for Keywords:**\n    *   I need to look for \"golf\", \"lima\", and \"alpha\" within the text to find their associated",
+  "timestamp": "2026-06-08T09:25:27.756982Z",
+  "context_tokens": 4000,
+  "wall_clock_seconds": 52.941046399995685
+}

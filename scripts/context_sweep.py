@@ -38,7 +38,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from harness import cells as cell_registry
-from harness.runners import hf_runner
+from harness.runners import hf_runner, llamacpp_runner
 from harness.runners.hf_runner import RunConfig
 
 
@@ -46,11 +46,18 @@ DEFAULT_CONTEXTS = (2000, 4000, 8000, 16000)
 DEFAULT_CELL_IDS = ("1", "2", "6", "7")
 
 
+def _runner_for(cell):
+    """Pick the runner by cell.stack."""
+    if cell.stack == "llamacpp":
+        return llamacpp_runner
+    return hf_runner
+
+
 def _run_combo_inproc(cell, cfg, ctx: int) -> dict:
     """Run one (cell, ctx) combo in-process. Returns the result dict."""
     t0 = time.perf_counter()
     try:
-        rec = hf_runner.run(cell, cfg)
+        rec = _runner_for(cell).run(cell, cfg)
     except Exception as e:
         traceback.print_exc()
         rec = {
@@ -168,13 +175,16 @@ def run_sweep(
             frac = q.get("fraction")
             s = rec.get("speed", {})
             peak_gb = rec.get("memory", {}).get("peak_vram_bytes", 0) / (1024**3)
+            tps = s.get('decode_tokens_per_second') or 0
+            ttft = s.get('ttft_seconds')
+            ttft_s = f"{ttft:.3f}s" if isinstance(ttft, (int, float)) else "n/a"
             print(
                 f"  → ctx={ctx} cell={cell.id}  {status}  "
                 f"NIH={frac if isinstance(frac, (int, float)) else 'N/A':<5}  "
                 f"peak={peak_gb:.1f}GiB  "
-                f"tok/s={s.get('decode_tokens_per_second', 0):.1f}  "
-                f"TTFT={s.get('ttft_seconds', 0):.3f}s  "
-                f"({rec['wall_clock_seconds']:.1f}s wall)"
+                f"tok/s={tps:.1f}  "
+                f"TTFT={ttft_s}  "
+                f"({rec.get('wall_clock_seconds', 0):.1f}s wall)"
             )
             results.append(rec)
     return results
@@ -202,14 +212,17 @@ def render_sweep_summary(results: List[dict]) -> str:
             s = r.get("speed", {})
             frac = q.get("fraction")
             frac_cell = f"{frac:.2f}" if isinstance(frac, (int, float)) else "N/A"
+            tps = s.get('decode_tokens_per_second') or 0
+            ttft = s.get('ttft_seconds')
+            ttft_s = f"{ttft:.3f}" if isinstance(ttft, (int, float)) else "n/a"
             out_lines.append(
                 f"| {r.get('context_tokens', '?')} "
                 f"| {r.get('status', '?')} "
                 f"| {frac_cell} "
                 f"| {_fmt_bytes(m.get('peak_vram_bytes', 0))} "
                 f"| {_fmt_bytes(m.get('kv_cache_bytes_at_target_len', 0))} "
-                f"| {s.get('decode_tokens_per_second', 0):.1f} "
-                f"| {s.get('ttft_seconds', 0):.3f} "
+                f"| {tps:.1f} "
+                f"| {ttft_s} "
                 f"| {r.get('wall_clock_seconds', 0):.1f} |"
             )
         out_lines.append("")
