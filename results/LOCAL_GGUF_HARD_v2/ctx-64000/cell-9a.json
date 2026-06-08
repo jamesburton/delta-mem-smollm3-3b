@@ -1,0 +1,80 @@
+{
+  "cell_id": "9a",
+  "title": "Qwen3.5-4B-MTP-GGUF Q4_K_M",
+  "status": "partial",
+  "quality": {
+    "hard_multineedle": {
+      "per_needle_correct": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "n_needles": 10,
+      "n_distractors": 30,
+      "distractors_mentioned": 0,
+      "fraction_correct": 0.0,
+      "recall_all": false,
+      "precision_against_distractors": 0.0
+    },
+    "perplexity": null
+  },
+  "memory": {
+    "peak_vram_bytes": 18446739688447279104,
+    "kv_cache_bytes_at_target_len": 0,
+    "prefill_peak_vram_bytes": null,
+    "decode_peak_vram_bytes": 18446739688447279104,
+    "decode_resident_vram_bytes": 18446739688447279104,
+    "pre_load_used_vram_bytes": 1024458752,
+    "post_load_used_vram_bytes": 12660506624
+  },
+  "speed": {
+    "prefill_seconds": null,
+    "ttft_seconds": null,
+    "decode_seconds": 1537.7441851000767,
+    "new_tokens": 2141,
+    "decode_tokens_per_second": 1.3922992008327206
+  },
+  "config": {
+    "cell": {
+      "id": "9a",
+      "title": "Qwen3.5-4B-MTP-GGUF Q4_K_M",
+      "base_model": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "stack": "llamacpp",
+      "stages": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "kv_lever": "none",
+      "speed_lever": "native-MTP",
+      "blocked_by": null,
+      "notes": ""
+    },
+    "run": {
+      "target_tokens": 64000,
+      "n_needles": 10,
+      "max_new_tokens": 4096,
+      "dtype": "gguf",
+      "device": "cuda",
+      "gguf_quant": "Q4_K_M",
+      "n_ctx": 131072,
+      "n_gpu_layers": -1
+    },
+    "backbone": {
+      "model_id": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "gguf_file": "Qwen3.5-4B-Q4_K_M.gguf",
+      "stack": "llamacpp"
+    }
+  },
+  "answer_preview": ", tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir,",
+  "timestamp": "2026-06-08T12:00:44.077314Z",
+  "context_tokens": 64000,
+  "wall_clock_seconds": 1590.5470526001882
+}

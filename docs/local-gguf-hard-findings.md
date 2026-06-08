@@ -85,18 +85,43 @@ target context" — that claim is now **falsified**. Both Q4 (under
 generous tokens) and Q5/Q8 (under any tokens) hit the floor on the
 hard task at 64K actual tokens. The δ-Mem hypothesis is live again.
 
+**The cliff is in the model, not the squeeze.** A follow-up sweep
+(`results/LOCAL_GGUF_HARD_v2/`) probes Q4 alone at 32K and 64K target
+tokens with `max_new_tokens=4096`:
+
+| target | actual | Q4_K_M outcome |
+|--------|--------|----------------|
+| 32K    | 64K    | **1.00 correct** (it was truncation, not failure) |
+| 64K    | 128K   | **0.00 — same `tapir, tapir, ...` loop** as Q5/Q8 hit at 32K |
+
+So Q4 just needed the token budget; the model itself is competent on
+64K-token retrieval. But at 128K tokens Q4 enters the same degenerate
+loop that Q5/Q8 fall into at 64K. **Higher precision → cliff at shorter
+context.** This is a property of the base model under hard recall
+pressure, independent of how aggressively we squeeze.
+
 **What the Kaggle notebook will test (and why):**
 
 The notebook (`notebooks/kaggle_long_context_delta_mem.ipynb`) runs
 cell 1 (vanilla bf16) vs cell 2 (bf16 + δ-Mem adapter) at 16K and
 32K target tokens with the same `hard_multineedle` task and 1024
-max_new_tokens. Decision logic at the end:
+max_new_tokens. The decision logic now reads:
 
-- If `fraction_correct(cell 2 at 32K)` > `fraction_correct(cell 1 at 32K)`:
-  δ-Mem rescued quality where vanilla degraded — that's the win.
-- If both are 0.00 or both are high: δ-Mem is overhead.
-- If Q4_K_M finishes at 1.00 with 4096 tokens but bf16 vanilla fails:
-  quantisation + reasoning was the right combo, not δ-Mem.
+- **bf16 vanilla AT 32K hits the tapir loop too** → the cliff is
+  generic to Qwen3.5-MTP at long context, and δ-Mem is the only
+  candidate intervention. If `bf16 + δ-Mem` doesn't loop while
+  vanilla does, **that is the clean δ-Mem win** the project has been
+  chasing.
+- **bf16 vanilla AT 32K solves it cleanly** → the degeneration is a
+  quantisation × context interaction in this specific MTP build, and
+  the right answer is "stay on bf16 if you have the memory; Q4 if you
+  don't, but budget tokens generously."
+- **Both bf16 vanilla and bf16 + δ-Mem fail** → δ-Mem doesn't
+  rescue the cliff. Retire it from active matrix.
+
+The Kaggle notebook's bumps `max_new_tokens` to 1024 (Q4 needed more
+than the easy task gave it; bf16 + reasoning could need even more —
+the notebook's smoke cells can adjust).
 
 ## Cross-rung comparison
 

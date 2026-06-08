@@ -1,0 +1,80 @@
+{
+  "cell_id": "9a",
+  "title": "Qwen3.5-4B-MTP-GGUF Q4_K_M",
+  "status": "ok",
+  "quality": {
+    "hard_multineedle": {
+      "per_needle_correct": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "n_needles": 10,
+      "n_distractors": 30,
+      "distractors_mentioned": 10,
+      "fraction_correct": 1.0,
+      "recall_all": true,
+      "precision_against_distractors": 0.5
+    },
+    "perplexity": null
+  },
+  "memory": {
+    "peak_vram_bytes": 10140778496,
+    "kv_cache_bytes_at_target_len": 0,
+    "prefill_peak_vram_bytes": null,
+    "decode_peak_vram_bytes": 10140778496,
+    "decode_resident_vram_bytes": 10140778496,
+    "pre_load_used_vram_bytes": 867172352,
+    "post_load_used_vram_bytes": 9017753600
+  },
+  "speed": {
+    "prefill_seconds": null,
+    "ttft_seconds": null,
+    "decode_seconds": 372.61874049995095,
+    "new_tokens": 4096,
+    "decode_tokens_per_second": 10.992469124081909
+  },
+  "config": {
+    "cell": {
+      "id": "9a",
+      "title": "Qwen3.5-4B-MTP-GGUF Q4_K_M",
+      "base_model": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "stack": "llamacpp",
+      "stages": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "kv_lever": "none",
+      "speed_lever": "native-MTP",
+      "blocked_by": null,
+      "notes": ""
+    },
+    "run": {
+      "target_tokens": 32000,
+      "n_needles": 10,
+      "max_new_tokens": 4096,
+      "dtype": "gguf",
+      "device": "cuda",
+      "gguf_quant": "Q4_K_M",
+      "n_ctx": 75776,
+      "n_gpu_layers": -1
+    },
+    "backbone": {
+      "model_id": "unsloth/Qwen3.5-4B-MTP-GGUF",
+      "gguf_file": "Qwen3.5-4B-Q4_K_M.gguf",
+      "stack": "llamacpp"
+    }
+  },
+  "answer_preview": ", tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tapir, tap to recall.\n\n<think>\nThinking Process:\n\n1.  **Analyze the Request:**\n    *   Input: A long text containing interleaved log entries and secret code entries.\n    *   Task: Extract ONLY the secret codes associated with specific keys.\n    *   Keys to recall: yankee, ferret, charlie, quebec, kestrel, ibis, zulu, tango, tapir, whiskey. (Note: The prompt lists \"tapir\" many times, but I need to check if there are multiple entries for \"tapir\" or if it's just a list of keys to look for. Looking at the text, I need to find the specific lines \"The secret code for [KEY] is [CODE].\" and extract the CODE for the specified keys.)\n    *   Output Format: 'key: CODE' on separate lines, one per key.\n    *   Constraint: Recall ONLY the secret codes (ignore the log entries).\n\n2.  **Scan the Text for Target Keys:**\n    I need to search for the pattern \"The secret code for [KEY] is [CODE].\"\n    The keys mentioned in the prompt's instruction list are: yankee, ferret, charlie, quebec, kestrel, ibis, zulu, tango, tapir, whiskey.\n\n    Let's scan the text for these specific keys.\n\n    *   Search for \"yankee\":\n        *   Found: \"The secret code for yankee is QX52-89U.\"\n        *   Code: QX52-89U\n\n    *   Search for \"ferret\":\n        *   Found: \"The secret code for ferret is VZ57-28Q.\"\n        *   Code: VZ57-28Q\n\n    *   Search for \"charlie\":\n        *   Found: \"The secret code for charlie is HT86-22M.\"\n        *   Code: HT86-22M\n\n    *   Search for \"quebec\":\n        *   Found: \"The secret code for quebec is JH62-66P.\"\n        *   Code: JH62-66P\n\n    *   Search for \"kestrel\":\n        *   Found: \"The secret code for kestrel is WG85-61A.\"\n        *   Code: WG85-61A\n\n    *   Search for \"ibis\":\n        *   Found: \"The secret code for ibis is TU66-52V.\"\n        *   Code: TU66-52V\n\n    *   Search for \"zulu\":\n        *   Found: \"The secret code for zulu is FH81-40P.\"\n        *   Code: FH81-40P\n\n    *   Search for \"tango\":\n        *   Found: \"The secret code for tango is VD50-75Z.\"\n        *   Code: VD50-75Z\n\n    *   Search for \"tapir\":\n        *   Found: \"The secret code for tapir is ZM32-52C.\"\n        *   Code: ZM32-52C\n        *   (Note: The prompt lists \"tapir\" many times in the instruction list, but there is only one entry in the text for \"tapir\". I should list it once per key requested, or just once if it's the same key. The instruction says \"one per key\". Since \"tapir\" is a single key, I will list it once.)\n\n    *   Search for \"whiskey\":\n        *   Found: \"The secret code for whiskey is VN96-66Q.\"\n        *   Code: VN96-66Q\n\n3.  **Verify the Findings:**\n    *   yankee: QX52-89U (Line 10 approx)\n    *   ferret: VZ57-28Q (Line 100 approx)\n    *   charlie: HT86-22M (Line 200 approx)\n    *   quebec: JH62-66P (Line 300 approx)\n    *   kestrel: WG85-61A (Line 400 appr",
+  "timestamp": "2026-06-08T11:34:13.528572Z",
+  "context_tokens": 32000,
+  "wall_clock_seconds": 411.92673059995286
+}
