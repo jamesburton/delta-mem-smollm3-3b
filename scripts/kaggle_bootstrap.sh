@@ -33,8 +33,27 @@ fi
 
 echo "==> profile: $PROFILE  (TORCH_CUDA_ARCH_LIST=$ARCH_LIST)"
 
+# Cache setup (data caches + wheels). See docs/cache-profiles.md.
+# This is opportunistic: if the Kaggle Dataset isn't attached and the wheel
+# URLs in the manifest aren't published yet, it falls through cleanly and
+# the rest of the bootstrap downloads the fresh way.
+if [[ -f "${WHEEL_DIR}/manifest.json" ]]; then
+  echo "==> running cache_setup.py for profile $PROFILE"
+  python scripts/cache_setup.py --profile "$PROFILE" || \
+    echo "  cache_setup reported non-zero; continuing with fresh downloads"
+else
+  echo "  no manifest at ${WHEEL_DIR}/manifest.json; skipping cache_setup"
+fi
+
+# If the cache symlinked a pip wheelhouse, use it to speed up pip.
+PIP_FIND_LINKS=""
+if [[ -d "/kaggle/working/pip_wheelhouse" ]]; then
+  PIP_FIND_LINKS="--find-links=/kaggle/working/pip_wheelhouse"
+  echo "==> using pip wheelhouse at /kaggle/working/pip_wheelhouse"
+fi
+
 echo "==> installing pinned requirements"
-pip install -q -r requirements.txt
+pip install -q $PIP_FIND_LINKS -r requirements.txt
 
 echo "==> setting up delta-Mem (upstream — clone + PYTHONPATH, not pip)"
 DM_DIR=".deps/delta-Mem"
