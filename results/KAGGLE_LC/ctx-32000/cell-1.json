@@ -1,0 +1,8 @@
+{
+  "cell_id": "1",
+  "title": "Qwen3-4B vanilla full attention",
+  "status": "failed",
+  "error": "RuntimeError('No available kernel. Aborting execution.')",
+  "context_tokens": 32000,
+  "wall_clock_seconds": 12.275626128999647
+}
