@@ -1,0 +1,76 @@
+{
+  "runtime": {
+    "torch": "2.11.0+cu126",
+    "cuda": "12.6",
+    "device": "NVIDIA GeForce RTX 3060",
+    "device_cc": "8.6",
+    "sdpa_flash": true,
+    "sdpa_mem_eff": false,
+    "sdpa_math": true,
+    "bnb": "0.49.2",
+    "attn_impl": "eager",
+    "q_proj_class": "Linear4bit"
+  },
+  "results": [
+    {
+      "block_length": 128,
+      "steps": 128,
+      "n_fwd": 128,
+      "wall_s": 36.76,
+      "tok_per_s": 3.5,
+      "ms_per_fwd": 287.2,
+      "peak_vram_gb": 5.49,
+      "snippet": "Lily can run 12 kilometers per hour for 4 hours, so she runs a total of 12 * 4 =\u2026"
+    },
+    {
+      "block_length": 32,
+      "steps": 64,
+      "n_fwd": 64,
+      "wall_s": 18.12,
+      "tok_per_s": 7.1,
+      "ms_per_fwd": 283.1,
+      "peak_vram_gb": 5.49,
+      "snippet": "In the first 4 hours, Lily runs 12 kilometers per hour, so she runs 12 * 4 = 48 \u2026"
+    },
+    {
+      "block_length": 64,
+      "steps": 64,
+      "n_fwd": 64,
+      "wall_s": 19.38,
+      "tok_per_s": 6.6,
+      "ms_per_fwd": 302.7,
+      "peak_vram_gb": 5.49,
+      "snippet": "In the first 4 hours, Lily runs 12 kilometers per hour, so she runs 12 * 4 = 48 \u2026"
+    },
+    {
+      "block_length": 128,
+      "steps": 64,
+      "n_fwd": 64,
+      "wall_s": 19.44,
+      "tok_per_s": 6.6,
+      "ms_per_fwd": 303.8,
+      "peak_vram_gb": 5.49,
+      "snippet": "Lily can run 12 kilometers per hour for 4 hours, so she runs 12 * 4 = 48 kilomet\u2026"
+    },
+    {
+      "block_length": 128,
+      "steps": 32,
+      "n_fwd": 32,
+      "wall_s": 9.75,
+      "tok_per_s": 13.1,
+      "ms_per_fwd": 304.6,
+      "peak_vram_gb": 5.49,
+      "snippet": "Lily can run 12 kilometers per hour for 4 hours, so she runs 12 * 4 = 48 kilomet\u2026"
+    },
+    {
+      "block_length": 128,
+      "steps": 16,
+      "n_fwd": 16,
+      "wall_s": 4.59,
+      "tok_per_s": 27.9,
+      "ms_per_fwd": 287.0,
+      "peak_vram_gb": 5.49,
+      "snippet": "In the first 4 hours, Lily runs $12 \\times 4 = 48$ kilometers. In the next 4 hou\u2026"
+    }
+  ]
+}
