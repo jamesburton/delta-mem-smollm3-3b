@@ -1,0 +1,38 @@
+{
+  "_meta": {
+    "model": "Qwen/Qwen3-4B-Instruct-2507",
+    "hardware": "RTX 3060 12 GB (sm_86)",
+    "stack": "torch 2.11.0+cu126, transformers 5.4.0, flash-attn 2.8.3.post1 (inference-only build), bitsandbytes 0.49.2, Python 3.11, Windows 11",
+    "script": "scripts/ar_baseline.py",
+    "prompt": "Lily math word problem (~45 natural tokens; --ctx pads with filler)",
+    "date": "2026-06-17"
+  },
+  "short_ctx_quant_attn_matrix": {
+    "_description": "Natural prompt (~45 tokens), 128 new tokens. Isolates quant vs attention backend.",
+    "cells": [
+      {"quant": "bnb-4bit", "attn": "sdpa",               "ctx": 45, "new_tokens": 128, "wall_s": 43.09, "tok_per_s": 3.0, "ms_per_tok": 336.7, "peak_vram_gb": 2.56},
+      {"quant": "bnb-4bit", "attn": "flash_attention_2",  "ctx": 45, "new_tokens": 128, "wall_s": 41.40, "tok_per_s": 3.1, "ms_per_tok": 323.4, "peak_vram_gb": 2.56},
+      {"quant": "bf16",     "attn": "sdpa",               "ctx": 45, "new_tokens": 128, "wall_s": 31.60, "tok_per_s": 4.1, "ms_per_tok": 246.9, "peak_vram_gb": 7.53},
+      {"quant": "bf16",     "attn": "flash_attention_2",  "ctx": 45, "new_tokens": 128, "wall_s": 31.39, "tok_per_s": 4.1, "ms_per_tok": 245.2, "peak_vram_gb": 7.53}
+    ],
+    "verdict": "FA2 doesn't matter at short context regardless of quant. bf16 is 35% faster than bnb-4bit (4.1 vs 3.0 tok/s) — the ~90 ms/tok overhead is bnb dequant per forward."
+  },
+  "long_ctx_fa2_sweep_bf16": {
+    "_description": "Synthetic prompt padded with filler tokens, 64 new tokens. Shows where FA2 actually pays off.",
+    "cells": [
+      {"ctx": 1024, "attn": "sdpa",               "new_tokens": 64, "wall_s": 15.77,  "tok_per_s": 4.1, "ms_per_tok": 246.4,  "peak_vram_gb": 8.04, "status": "ok"},
+      {"ctx": 1024, "attn": "flash_attention_2",  "new_tokens": 64, "wall_s": 15.62,  "tok_per_s": 4.1, "ms_per_tok": 244.1,  "peak_vram_gb": 7.75, "status": "ok"},
+      {"ctx": 4096, "attn": "sdpa",               "new_tokens": 64, "wall_s": 455.96, "tok_per_s": 0.1, "ms_per_tok": 7124.4, "peak_vram_gb": 13.00, "status": "degraded — overcommitted into WDDM shared memory"},
+      {"ctx": 4096, "attn": "flash_attention_2",  "new_tokens": 64, "wall_s": 17.00,  "tok_per_s": 3.8, "ms_per_tok": 265.6,  "peak_vram_gb": 8.37, "status": "ok"},
+      {"ctx": 8192, "attn": "sdpa",               "new_tokens": 64, "wall_s": null,   "tok_per_s": null,"ms_per_tok": null,   "peak_vram_gb": null, "status": "OOM: torch.OutOfMemoryError in sdpa_attention_forward (PyTorch had overcommitted to 24.65 GiB via WDDM before hitting a wall)"},
+      {"ctx": 8192, "attn": "flash_attention_2",  "new_tokens": 64, "wall_s": 18.71,  "tok_per_s": 3.4, "ms_per_tok": 292.4,  "peak_vram_gb": 9.23, "status": "ok"}
+    ],
+    "verdict": "FA2 is a long-context ENABLER, not a tok/s booster. SDPA falls off a cliff at ctx=4096 (27× per-token slowdown via WDDM paging) and OOMs entirely at ctx=8192. FA2 degrades gracefully (4.1 → 3.8 → 3.4 tok/s at 1K → 4K → 8K) with VRAM staying well under the 12 GB card budget."
+  },
+  "overall_conclusions": [
+    "FA2 install was worth doing — but for long-context survival, not short-decode tok/s.",
+    "Original SDPA-math-fallback hypothesis was wrong for short-context bnb-4bit Qwen3-4B. Confirmed by 4-cell quant×attn matrix.",
+    "bnb 4-bit dequant adds ~90 ms/tok of overhead vs bf16 (336.7 → 246.9 ms/tok). To beat that floor, look at GPTQ-Marlin (fused dequant+matmul) or GGUF/llama.cpp.",
+    "On 12 GB VRAM, Qwen3-4B in bf16 ABSOLUTELY requires FA2 above ctx ≈ 2K. Without it, the SDPA path either pages through WDDM shared system memory (catastrophic latency) or OOMs."
+  ]
+}
