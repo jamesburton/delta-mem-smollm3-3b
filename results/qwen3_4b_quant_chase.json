@@ -14,14 +14,16 @@
     {"runtime": "transformers + bf16 native + FA2",                             "quant": "bf16",    "ctx": 45, "new": 128, "wall_s": 31.39, "tok_per_s": 4.1,  "ms_per_tok": 245.2, "peak_vram_gb": 7.53},
     {"runtime": "transformers + GPTQ-Triton backend (gptqmodel)",               "quant": "GPTQ-Int4 g128 sym", "checkpoint": "JunHowie/Qwen3-4B-Instruct-2507-GPTQ-Int4", "ctx": 45, "new": 128, "wall_s": 41.90, "tok_per_s": 3.1, "ms_per_tok": 327.3, "peak_vram_gb": 2.57},
     {"runtime": "llama-cpp-python 0.3.28 (source-built CUDA, project venv)",    "quant": "Q4_K_M",  "checkpoint": "unsloth/Qwen3-4B-Instruct-2507-GGUF", "ctx": 45, "new": 128, "wall_s": 2.91,  "tok_per_s": 44.0, "ms_per_tok": 22.7,  "peak_vram_gb": 3.90, "notes": "includes ~365ms prefill in wall"},
-    {"runtime": "ollama 0.30.7 (HTTP API)",                                     "quant": "Q4_K_M",  "checkpoint": "ollama qwen3:4b-instruct",                "ctx": 45, "new": 128, "eval_wall_s": 1.44, "tok_per_s": 88.9, "ms_per_tok": 11.2, "peak_vram_gb": null, "notes": "decode-only timing per ollama's eval_duration; prompt_eval=123 tps; load=13.85s (first call)"}
+    {"runtime": "ollama 0.30.7 (HTTP API) on T1",                               "quant": "Q4_K_M",  "checkpoint": "ollama qwen3:4b-instruct",                "ctx": 45, "new": 128, "eval_wall_s": 1.44, "tok_per_s": 88.9, "ms_per_tok": 11.2, "peak_vram_gb": null, "notes": "decode-only timing per ollama's eval_duration; prompt_eval=123 tps; load=13.85s (first call)"},
+    {"runtime": "ollama 0.30.9 (HTTP API) on T2 Strix Halo iGPU",                "quant": "Q4_K_M",  "checkpoint": "ollama qwen3:4b-instruct",                "ctx": 45, "new": 128, "eval_wall_s": 1.97, "tok_per_s": 64.8, "ms_per_tok": 15.4, "peak_vram_gb": null, "notes": "decode-only; prompt_eval=826 tps (6.7x T1); load=5.26s (2.6x faster than T1). gfx1151 iGPU via ROCm/HIP llama.cpp under ollama. SSH-orchestrated from T1."}
   ],
   "blocked_paths": [
     {"path": "GPTQ-Marlin backend (gptqmodel)",     "blocker": "ValueError: <class 'gptqmodel.nn_modules.qlinear.marlin.MarlinLinear'> does not support platform: win32"},
     {"path": "GPTQ-ExLlamaV2 backend (gptqmodel)", "blocker": "JIT build of gptqmodel_exllamav2_ops.pyd fails: missing built extension; needs full MSVC + nvcc + matching torch ABI in a clean shell. Likely tractable but not pursued given ollama win."}
   ],
   "ranking": [
-    {"rank": 1, "runtime": "ollama Q4_K_M",              "tok_per_s": 88.9, "vs_bnb": "29.6x"},
+    {"rank": 1, "runtime": "ollama Q4_K_M on T1",        "tok_per_s": 88.9, "vs_bnb": "29.6x"},
+    {"rank": "1b", "runtime": "ollama Q4_K_M on T2 Strix iGPU", "tok_per_s": 64.8, "vs_bnb": "21.6x", "vs_T1_ollama": "0.73x decode, 6.7x prefill"},
     {"rank": 2, "runtime": "llama-cpp-python Q4_K_M",     "tok_per_s": 44.0, "vs_bnb": "14.7x"},
     {"rank": 3, "runtime": "transformers bf16 (FA2 or SDPA)", "tok_per_s": 4.1, "vs_bnb": "1.4x"},
     {"rank": 4, "runtime": "transformers GPTQ-Triton",     "tok_per_s": 3.1, "vs_bnb": "1.03x"},
