@@ -1,0 +1,72 @@
+{
+  "cell_id": "D1",
+  "title": "LLaDA-8B-Instruct (block-diffusion) NIH",
+  "status": "partial",
+  "quality": {
+    "multineedle": {
+      "per_needle": [
+        false,
+        false,
+        false
+      ],
+      "recall_all": false,
+      "recall_any": false,
+      "fraction": 0.0
+    },
+    "perplexity": null
+  },
+  "memory": {
+    "peak_vram_bytes": 10566362112,
+    "kv_cache_bytes_at_target_len": 1048576000,
+    "prefill_peak_vram_bytes": null,
+    "decode_peak_vram_bytes": 10566362112,
+    "decode_resident_vram_bytes": null
+  },
+  "speed": {
+    "prefill_seconds": 0.0,
+    "ttft_seconds": 0.0,
+    "decode_seconds": 87.19327329983935,
+    "new_tokens": 256,
+    "decode_tokens_per_second": 2.9360063031430164,
+    "diffusion_steps": 16,
+    "diffusion_block_length": 128,
+    "diffusion_gen_length": 256,
+    "diffusion_ms_per_step": 5449.579581239959,
+    "diffusion_prompt_tokens": 6103
+  },
+  "config": {
+    "cell": {
+      "id": "D1",
+      "title": "LLaDA-8B-Instruct (block-diffusion) NIH",
+      "base_model": "GSAI-ML/LLaDA-8B-Instruct",
+      "stack": "hf",
+      "stages": [
+        "S3"
+      ],
+      "kv_lever": "none-no-kv-cache",
+      "speed_lever": "block-diffusion",
+      "blocked_by": null,
+      "notes": "Diffusion runner; tok/s = emitted_tokens / wall."
+    },
+    "run": {
+      "target_tokens": 2000,
+      "n_needles": 3,
+      "max_new_tokens": 256,
+      "dtype": "bfloat16",
+      "device": "auto"
+    },
+    "diffusion": {
+      "model_id": "GSAI-ML/LLaDA-8B-Instruct",
+      "quant": "bnb-4bit",
+      "steps": 16,
+      "block_length": 128,
+      "gen_length": 256,
+      "flash_attention": true,
+      "temperature": 0.0
+    }
+  },
+  "answer_preview": "golf::45--4\n\n\nLorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Lorem ipsum dolor sit amet, consectetureturiscing elitetur Letureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetureturetur",
+  "timestamp": "2026-06-17T11:00:37.742480Z",
+  "context_tokens": 2000,
+  "wall_clock_seconds": 454.11516450019553
+}

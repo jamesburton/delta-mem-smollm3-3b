@@ -169,6 +169,29 @@ mirrors that:
 
 ---
 
+## Path C — Ollama (GGUF, third-party runtime)
+
+Ollama is installed at `E:\Ollama\ollama` (v0.30.7). It's essentially a packaged llama.cpp with its own model registry and a built-in tok/s readout — useful as a third comparison point alongside our project-built `llama-cpp-python` (Path B). Existing local pulls (verified 2026-06-17): `gemma4:e4b` 9.6 GB.
+
+**Why include it:**
+- Different runtime path on the same GGUF kernels — sanity-checks whether Path B's number is the kernels themselves or includes llama-cpp-python wrapper overhead.
+- Standard `ollama run --verbose` reports `eval rate: X tokens/s` directly — no instrumentation needed.
+- Simpler to operate than maintaining a custom llama-cpp-python venv.
+
+**Setup:**
+```powershell
+# pull a Qwen3-4B-Instruct GGUF; check ollama.com/library for an Instruct-2507 tag.
+# Fallback: a community quant like bartowski's, sideloaded via Modelfile if no official tag exists.
+ollama pull qwen3:4b-instruct
+ollama run --verbose qwen3:4b-instruct "Lily can run 12 kilometers per hour for 4 hours..."
+```
+
+**What to capture:** `eval rate` (decode tok/s), `prompt eval rate` (prefill tok/s), `total duration`, `load duration`. Apples-to-apples comparison with Path B requires checking that ollama's quant matches Path B's (Q4_K_M ideally; if Path B used Q4_K_M, point ollama at the same).
+
+**Expected outcome:** within ~10% of Path B. If they diverge much, the llama-cpp-python wrapper has overhead worth investigating.
+
+---
+
 ## Recommendation
 
 **Run Path B first, Path A second, in the morning.**
@@ -213,14 +236,16 @@ the other still produces a measurement.
 
 ```powershell
 # Path B (recommended first) — GGUF via llama-cpp in the project venv
-E:\Development\llm-model-tests\delta-mem-smollm3-3b\.venv\Scripts\python.exe `
-    scripts\ar_gguf.py --quant Q4_K_M
+.\scripts\ar_gguf_qwen3_4b.bat --quant Q4_K_M
+
+# Path C — Ollama on the same/similar GGUF
+ollama pull qwen3:4b-instruct ; ollama run --verbose qwen3:4b-instruct "Lily can run 12 kilometers per hour for 4 hours. After that, she runs 6 kilometers per hour. How many kilometers can she run in 8 hours?"
 
 # Path A — GPTQ-Marlin via gptqmodel in the system Python311
 .\scripts\ar_marlin.bat
 ```
 
-Both scripts print results in the same format as `ar_baseline.py` for direct comparison against the bnb floor.
+Path B and Path A print results in the same format as `ar_baseline.py` for direct comparison against the bnb floor. Path C's `eval rate: X tokens/s` from `--verbose` is the analogue.
 
 ---
 

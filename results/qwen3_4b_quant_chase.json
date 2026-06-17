@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "model": "Qwen/Qwen3-4B-Instruct-2507",
+    "hardware": "RTX 3060 12 GB (sm_86)",
+    "date": "2026-06-17 (evening kickoff)",
+    "prompt": "Lily math word problem (~45 natural tokens, --ctx=4096 alloc)",
+    "max_new_tokens": 128,
+    "temperature": 0
+  },
+  "cells": [
+    {"runtime": "transformers + bnb-4bit NF4 + bf16 compute + SDPA",          "quant": "NF4",     "ctx": 45, "new": 128, "wall_s": 43.09, "tok_per_s": 3.0,  "ms_per_tok": 336.7, "peak_vram_gb": 2.56},
+    {"runtime": "transformers + bnb-4bit NF4 + bf16 compute + FA2",            "quant": "NF4",     "ctx": 45, "new": 128, "wall_s": 41.40, "tok_per_s": 3.1,  "ms_per_tok": 323.4, "peak_vram_gb": 2.56},
+    {"runtime": "transformers + bf16 native + SDPA",                            "quant": "bf16",    "ctx": 45, "new": 128, "wall_s": 31.60, "tok_per_s": 4.1,  "ms_per_tok": 246.9, "peak_vram_gb": 7.53},
+    {"runtime": "transformers + bf16 native + FA2",                             "quant": "bf16",    "ctx": 45, "new": 128, "wall_s": 31.39, "tok_per_s": 4.1,  "ms_per_tok": 245.2, "peak_vram_gb": 7.53},
+    {"runtime": "transformers + GPTQ-Triton backend (gptqmodel)",               "quant": "GPTQ-Int4 g128 sym", "checkpoint": "JunHowie/Qwen3-4B-Instruct-2507-GPTQ-Int4", "ctx": 45, "new": 128, "wall_s": 41.90, "tok_per_s": 3.1, "ms_per_tok": 327.3, "peak_vram_gb": 2.57},
+    {"runtime": "llama-cpp-python 0.3.28 (source-built CUDA, project venv)",    "quant": "Q4_K_M",  "checkpoint": "unsloth/Qwen3-4B-Instruct-2507-GGUF", "ctx": 45, "new": 128, "wall_s": 2.91,  "tok_per_s": 44.0, "ms_per_tok": 22.7,  "peak_vram_gb": 3.90, "notes": "includes ~365ms prefill in wall"},
+    {"runtime": "ollama 0.30.7 (HTTP API)",                                     "quant": "Q4_K_M",  "checkpoint": "ollama qwen3:4b-instruct",                "ctx": 45, "new": 128, "eval_wall_s": 1.44, "tok_per_s": 88.9, "ms_per_tok": 11.2, "peak_vram_gb": null, "notes": "decode-only timing per ollama's eval_duration; prompt_eval=123 tps; load=13.85s (first call)"}
+  ],
+  "blocked_paths": [
+    {"path": "GPTQ-Marlin backend (gptqmodel)",     "blocker": "ValueError: <class 'gptqmodel.nn_modules.qlinear.marlin.MarlinLinear'> does not support platform: win32"},
+    {"path": "GPTQ-ExLlamaV2 backend (gptqmodel)", "blocker": "JIT build of gptqmodel_exllamav2_ops.pyd fails: missing built extension; needs full MSVC + nvcc + matching torch ABI in a clean shell. Likely tractable but not pursued given ollama win."}
+  ],
+  "ranking": [
+    {"rank": 1, "runtime": "ollama Q4_K_M",              "tok_per_s": 88.9, "vs_bnb": "29.6x"},
+    {"rank": 2, "runtime": "llama-cpp-python Q4_K_M",     "tok_per_s": 44.0, "vs_bnb": "14.7x"},
+    {"rank": 3, "runtime": "transformers bf16 (FA2 or SDPA)", "tok_per_s": 4.1, "vs_bnb": "1.4x"},
+    {"rank": 4, "runtime": "transformers GPTQ-Triton",     "tok_per_s": 3.1, "vs_bnb": "1.03x"},
+    {"rank": 5, "runtime": "transformers bnb-4bit (baseline)", "tok_per_s": 3.0, "vs_bnb": "1.00x"}
+  ],
+  "verdict": "Ollama wins by ~2x over the source-built llama-cpp-python on identical Q4_K_M kernels. The Python wrapper has meaningful overhead. For short-decode workloads on this card, ollama is now the canonical runtime; GPTQ on Windows is dead (Marlin unsupported, ExLlamaV2 needs nontrivial build work). bnb-4bit stays only for cases where the workload must live in HF transformers (e.g. the existing harness paths)."
+}
